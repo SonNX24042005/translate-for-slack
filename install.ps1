@@ -124,7 +124,7 @@ try {
 Write-Host ""
 Write-Host "→ Đang mở trang quản lý tiện ích trên trình duyệt..." -ForegroundColor Yellow
 if (-not [string]::IsNullOrEmpty($browserPath) -and (Test-Path $browserPath)) {
-    Start-Process -FilePath $browserPath -ArgumentList $extensionsUrl
+    Start-Process -FilePath $browserPath -ArgumentList "--app=$extensionsUrl"
 } else {
     Start-Process $extensionsUrl
 }
@@ -132,13 +132,16 @@ if (-not [string]::IsNullOrEmpty($browserPath) -and (Test-Path $browserPath)) {
 # 5. Hướng dẫn người dùng hoàn tất
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Hướng dẫn hoàn tất cài đặt (2 bước)" -ForegroundColor Cyan
+Write-Host "  Hướng dẫn hoàn tất cài đặt" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 if ($copied) {
     Write-Host "✓ Đã tự động sao chép đường dẫn thư mục vào clipboard!" -ForegroundColor Green
 } else {
     Write-Host "• Đường dẫn thư mục cài đặt: $InstallDir"
 }
+Write-Host ""
+Write-Host "• Địa chỉ trang tiện ích: $extensionsUrl" -ForegroundColor Yellow
+Write-Host "  (Nếu trình duyệt mở trang chủ, hãy dán địa chỉ trên vào thanh URL rồi Enter)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "1. Bật công tắc 'Chế độ dành cho nhà phát triển' (Developer mode) ở góc trên bên phải trang tiện ích." -ForegroundColor White
 Write-Host "2. Nhấn nút 'Tải tiện ích đã giải nén' (Load unpacked) ở góc trên bên trái." -ForegroundColor White
