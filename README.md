@@ -40,8 +40,17 @@ Extension hỗ trợ thu thập và dịch các cuộc trò chuyện trên Slack
 4. Nhấn **Tải tiện ích đã giải nén** (Load unpacked) và chọn thư mục chứa mã nguồn extension.
 
 ### 2. Thiết lập ban đầu
+
+**Bước 1: Lấy khóa API Gemini miễn phí từ Google AI Studio**
+1. Truy cập [Google AI Studio](https://aistudio.google.com/app/apikey) và đăng nhập bằng tài khoản Google của bạn.
+2. Nhấn nút **Create API key** (hoặc **Get API key** ở thanh menu bên trái).
+3. Chọn **Create API key in new project** (Tạo khóa API trong dự án mới) hoặc chọn một dự án Google Cloud có sẵn.
+4. Nhấn biểu tượng sao chép để lưu chuỗi khóa API vừa tạo.
+
+**Bước 2: Cấu hình extension**
 1. Nhấn vào biểu tượng extension trên thanh công cụ của trình duyệt để mở popup.
-2. Nhập khóa API Gemini, lựa chọn model và thiết lập ngôn ngữ đích cần dịch.
+2. Dán khóa API vừa sao chép vào ô **Khóa API Gemini** (bạn cũng có thể bấm vào dòng *Lấy khóa API tại Google AI Studio* ngay trên giao diện popup để mở trang tạo khóa).
+3. Lựa chọn model (mặc định: `gemini-3.8-flash`) và thiết lập ngôn ngữ đích cần dịch.
 
 ### 3. Sử dụng trên Slack
 1. Truy cập Slack trên trình duyệt web.

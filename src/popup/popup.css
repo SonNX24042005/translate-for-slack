@@ -93,6 +93,22 @@ footer {
   font-size: 12px;
 }
 
+.label-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.api-key-link {
+  color: #1264a3;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.api-key-link:hover {
+  text-decoration: underline;
+}
+
 input[type="number"],
 input[type="text"],
 input[type="password"] {
@@ -263,6 +279,10 @@ footer {
   .limits label,
   .language-field {
     color: #c7c7c7;
+  }
+
+  .api-key-link {
+    color: #1d9bd1;
   }
 
   .language-options {
