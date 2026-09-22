@@ -1,0 +1,134 @@
+.tfs-history-control {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 10000;
+  font-family: Slack-Lato, Slack-Fractions, appleLogo, sans-serif;
+}
+
+.tfs-thread-history-control {
+  bottom: 66px;
+}
+
+.tfs-translation-control {
+  bottom: 112px;
+}
+
+.tfs-translate-new-control {
+  bottom: 158px;
+}
+
+.tfs-controls-toggle {
+  bottom: 204px;
+}
+
+body[data-tfs-controls-collapsed="true"] .tfs-history-control:not(.tfs-controls-toggle) {
+  display: none;
+}
+
+.tfs-controls-toggle .tfs-controls-toggle-button {
+  justify-content: center;
+  width: 36px;
+  padding: 0;
+  color: #454245;
+  border-color: #bbbabb;
+  border-radius: 50%;
+}
+
+.tfs-translation-control .tfs-history-button {
+  color: #1264a3;
+  border-color: #1264a3;
+}
+
+.tfs-translate-new-control .tfs-history-button {
+  color: #007a5a;
+  border-color: #007a5a;
+}
+
+.tfs-thread-history-control .tfs-history-button {
+  color: #4a154b;
+  border-color: #4a154b;
+}
+
+.tfs-history-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  color: #1d1c1d;
+  background: #fff;
+  border: 1px solid #bbbabb;
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tfs-history-button:hover {
+  border-color: #1264a3;
+  color: #1264a3;
+}
+
+.tfs-history-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tfs-history-control[data-state="running"] .tfs-history-button {
+  cursor: progress;
+}
+
+.tfs-history-control[data-state="success"] .tfs-history-button {
+  color: #007a5a;
+  border-color: #007a5a;
+}
+
+.tfs-history-control[data-state="error"] .tfs-history-button {
+  color: #b4152b;
+  border-color: #b4152b;
+}
+
+.tfs-history-control[data-state="warning"] .tfs-history-button {
+  color: #8a5a00;
+  border-color: #8a5a00;
+}
+
+.tfs-message-translation-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin: 4px 0 0 40px;
+  padding: 0;
+  color: #1264a3;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tfs-message-translation-toggle[data-state="running"] {
+  cursor: progress;
+}
+
+.tfs-message-translation-toggle[data-state="error"] {
+  color: #b4152b;
+}
+
+.tfs-message-translation-toggle:disabled {
+  opacity: 0.65;
+}
+
+.tfs-message-translation-toggle:hover {
+  color: #0b4c8c;
+}

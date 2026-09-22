@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dịch tin nhắn Slack</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M8 9h8M8 12h5"/></svg>
+        <div>
+          <h1>Dịch tin nhắn Slack</h1>
+          <p>Lưu lịch sử và dịch đồng bộ bằng Gemini.</p>
+        </div>
+      </header>
+
+      <section aria-labelledby="gemini-heading">
+        <h2 id="gemini-heading">Cấu hình Gemini</h2>
+        <div class="form-grid">
+          <label>
+            Khóa API Gemini
+            <input id="geminiApiKey" type="password" autocomplete="off" placeholder="Nhập khóa API" />
+          </label>
+          <label>
+            Model
+            <input id="geminiModel" type="text" spellcheck="false" value="gemini-3.8-flash" />
+          </label>
+          <div class="language-field">
+            <label for="targetLanguageSearch">Ngôn ngữ đích</label>
+            <div id="targetLanguagePicker" class="language-picker">
+              <div class="language-input-wrap">
+                <input
+                  id="targetLanguageSearch"
+                  type="text"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded="false"
+                  aria-controls="targetLanguageOptions"
+                  autocomplete="off"
+                  placeholder="Tìm ngôn ngữ"
+                />
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg>
+              </div>
+              <div id="targetLanguageOptions" class="language-options" role="listbox" hidden></div>
+            </div>
+          </div>
+        </div>
+        <p class="hint">Khóa chỉ được lưu trong kho cục bộ của extension và gửi trực tiếp đến Gemini khi dịch.</p>
+      </section>
+
+      <section aria-labelledby="storage-heading">
+        <h2 id="storage-heading">Kho tin nhắn</h2>
+        <label class="toggle-row" for="storeOriginalMessages">
+          <span>
+            <strong>Lưu tin nhắn đang hiển thị</strong>
+            <small>Tự lưu khi mở channel, DM, thread hoặc cuộn trang.</small>
+          </span>
+          <input id="storeOriginalMessages" type="checkbox" checked />
+        </label>
+
+        <div class="limits">
+          <label>
+            Số tin tối đa mỗi hội thoại
+            <input id="messageStoreMaxPerConversation" type="number" min="10" max="10000" step="10" value="1000" />
+          </label>
+          <label>
+            Tổng dung lượng tối đa (MB)
+            <input id="messageStoreMaxMegabytes" type="number" min="1" max="1000" step="1" value="50" />
+          </label>
+        </div>
+
+        <div class="usage-row">
+          <span id="messageStorageUsage" aria-live="polite">Đang đọc kho dữ liệu…</span>
+          <button id="clearMessageStorage" type="button" class="secondary">Xóa kho tin nhắn</button>
+        </div>
+      </section>
+
+      <p id="statusAlert" class="status" role="status" aria-live="polite" hidden></p>
+      <footer>
+        <span id="saveFeedback" aria-live="polite"></span>
+        <button id="resetButton" type="button">Đặt lại cấu hình</button>
+      </footer>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
