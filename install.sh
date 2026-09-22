@@ -129,54 +129,57 @@ fi
 
 echo "✓ Mã nguồn đã sẵn sàng tại: $INSTALL_DIR"
 
-# 3. Sao chép đường dẫn vào clipboard
+# 3. Sao chép link trang tiện ích vào clipboard
 COPIED=false
 if command -v wl-copy &>/dev/null; then
-  echo "$INSTALL_DIR" | wl-copy
+  echo -n "$EXTENSIONS_URL" | wl-copy
   COPIED=true
 elif command -v xclip &>/dev/null; then
-  echo -n "$INSTALL_DIR" | xclip -selection clipboard
+  echo -n "$EXTENSIONS_URL" | xclip -selection clipboard
   COPIED=true
 elif command -v xsel &>/dev/null; then
-  echo -n "$INSTALL_DIR" | xsel --clipboard --input
+  echo -n "$EXTENSIONS_URL" | xsel --clipboard --input
   COPIED=true
 elif command -v pbcopy &>/dev/null; then
-  echo -n "$INSTALL_DIR" | pbcopy
+  echo -n "$EXTENSIONS_URL" | pbcopy
   COPIED=true
 fi
 
-# 4. Mở trình duyệt đến trang quản lý tiện ích
+# 4. Mở trình duyệt
 echo ""
-echo "→ Đang mở trang quản lý tiện ích trên trình duyệt..."
+echo "→ Đang mở trình duyệt..."
 if [ -n "$BROWSER_CMD" ]; then
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    $BROWSER_CMD --args "--app=$EXTENSIONS_URL" >/dev/null 2>&1 &
-  else
-    $BROWSER_CMD --app="$EXTENSIONS_URL" >/dev/null 2>&1 &
-  fi
+  $BROWSER_CMD >/dev/null 2>&1 &
 elif command -v xdg-open &>/dev/null; then
-  xdg-open "$EXTENSIONS_URL" >/dev/null 2>&1 &
+  xdg-open "about:blank" >/dev/null 2>&1 &
 elif [[ "$OSTYPE" == "darwin"* ]]; then
   open "$EXTENSIONS_URL" >/dev/null 2>&1 &
 fi
 
 # 5. Hướng dẫn người dùng hoàn tất
 echo ""
-echo "=========================================="
-echo "  Hướng dẫn hoàn tất cài đặt"
-echo "=========================================="
+echo "================================================================="
+echo "                  HƯỚNG DẪN HOÀN TẤT CÀI ĐẶT"
+echo "================================================================="
 if [ "$COPIED" = true ]; then
-  echo "✓ Đã tự động sao chép đường dẫn thư mục vào clipboard!"
+  echo "✓ Đã tự động sao chép link trang tiện ích vào clipboard:"
+  echo "  👉  $EXTENSIONS_URL"
+  echo "  (Chỉ cần nhấn Ctrl+V vào thanh địa chỉ của trình duyệt rồi bấm Enter)"
 else
-  echo "• Đường dẫn thư mục cài đặt:"
-  echo "  $INSTALL_DIR"
+  echo "• Hãy nhập hoặc dán địa chỉ sau vào thanh URL của trình duyệt:"
+  echo "  👉  $EXTENSIONS_URL"
 fi
 echo ""
-echo "• Địa chỉ trang tiện ích: $EXTENSIONS_URL"
-echo "  (Nếu trình duyệt mở trang chủ, hãy dán địa chỉ trên vào thanh URL rồi Enter)"
+echo "-----------------------------------------------------------------"
+echo "ĐƯỜNG DẪN THƯ MỤC CÀI ĐẶT (ĐỂ CHỌN HOẶC SAO CHÉP):"
 echo ""
-echo "1. Bật công tắc 'Chế độ dành cho nhà phát triển' (Developer mode) ở góc trên bên phải."
-echo "2. Nhấn nút 'Tải tiện ích đã giải nén' (Load unpacked) ở góc trên bên trái."
-echo "3. Dán (Ctrl+V) hoặc chọn thư mục: $INSTALL_DIR"
-echo "=========================================="
+echo "  ┌─────────────────────────────────────────────────────────────┐"
+echo "  │  $INSTALL_DIR"
+echo "  └─────────────────────────────────────────────────────────────┘"
+echo ""
+echo "CÁC BƯỚC THỰC HIỆN TRÊN TRÌNH DUYỆT:"
+echo "  1. Trên trang tiện ích, gạt bật 'Chế độ dành cho nhà phát triển' (Developer mode) ở góc trên bên phải."
+echo "  2. Nhấn nút 'Tải tiện ích đã giải nén' (Load unpacked) ở góc trên bên trái."
+echo "  3. Chọn thư mục được đóng khung ở trên."
+echo "================================================================="
 echo "Hoàn tất! Extension Translate for Slack đã sẵn sàng hoạt động."

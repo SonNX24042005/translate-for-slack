@@ -112,39 +112,47 @@ if (Test-Path "$InstallDir\.git") {
 
 Write-Host "✓ Mã nguồn đã sẵn sàng tại: $InstallDir" -ForegroundColor Green
 
-# 3. Sao chép đường dẫn vào clipboard
+# 3. Sao chép link trang tiện ích vào clipboard
 try {
-    Set-Clipboard -Value $InstallDir
+    Set-Clipboard -Value $extensionsUrl
     $copied = $true
 } catch {
     $copied = $false
 }
 
-# 4. Mở trình duyệt đến trang quản lý tiện ích
+# 4. Mở trình duyệt
 Write-Host ""
-Write-Host "→ Đang mở trang quản lý tiện ích trên trình duyệt..." -ForegroundColor Yellow
+Write-Host "→ Đang mở trình duyệt..." -ForegroundColor Yellow
 if (-not [string]::IsNullOrEmpty($browserPath) -and (Test-Path $browserPath)) {
-    Start-Process -FilePath $browserPath -ArgumentList "--app=$extensionsUrl"
+    Start-Process -FilePath $browserPath
 } else {
-    Start-Process $extensionsUrl
+    Start-Process "about:blank"
 }
 
 # 5. Hướng dẫn người dùng hoàn tất
 Write-Host ""
-Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Hướng dẫn hoàn tất cài đặt" -ForegroundColor Cyan
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "=================================================================" -ForegroundColor Cyan
+Write-Host "                  HƯỚNG DẪN HOÀN TẤT CÀI ĐẶT" -ForegroundColor Cyan
+Write-Host "=================================================================" -ForegroundColor Cyan
 if ($copied) {
-    Write-Host "✓ Đã tự động sao chép đường dẫn thư mục vào clipboard!" -ForegroundColor Green
+    Write-Host "✓ Đã tự động sao chép link trang tiện ích vào clipboard:" -ForegroundColor Green
+    Write-Host "  >>  $extensionsUrl" -ForegroundColor Yellow
+    Write-Host "  (Chỉ cần nhấn Ctrl+V vào thanh địa chỉ của trình duyệt rồi bấm Enter)" -ForegroundColor White
 } else {
-    Write-Host "• Đường dẫn thư mục cài đặt: $InstallDir"
+    Write-Host "• Hãy nhập hoặc dán địa chỉ sau vào thanh URL của trình duyệt:" -ForegroundColor White
+    Write-Host "  >>  $extensionsUrl" -ForegroundColor Yellow
 }
 Write-Host ""
-Write-Host "• Địa chỉ trang tiện ích: $extensionsUrl" -ForegroundColor Yellow
-Write-Host "  (Nếu trình duyệt mở trang chủ, hãy dán địa chỉ trên vào thanh URL rồi Enter)" -ForegroundColor Gray
+Write-Host "-----------------------------------------------------------------" -ForegroundColor Cyan
+Write-Host "ĐƯỜNG DẪN THƯ MỤC CÀI ĐẶT (ĐỂ CHỌN HOẶC SAO CHÉP):" -ForegroundColor White
 Write-Host ""
-Write-Host "1. Bật công tắc 'Chế độ dành cho nhà phát triển' (Developer mode) ở góc trên bên phải trang tiện ích." -ForegroundColor White
-Write-Host "2. Nhấn nút 'Tải tiện ích đã giải nén' (Load unpacked) ở góc trên bên trái." -ForegroundColor White
-Write-Host "3. Dán (Ctrl+V) hoặc chọn thư mục: $InstallDir" -ForegroundColor Yellow
-Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "  +-------------------------------------------------------------+" -ForegroundColor Yellow
+Write-Host "  |  $InstallDir" -ForegroundColor Green
+Write-Host "  +-------------------------------------------------------------+" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "CÁC BƯỚC THỰC HIỆN TRÊN TRÌNH DUYỆT:" -ForegroundColor White
+Write-Host "  1. Trên trang tiện ích, gạt bật 'Chế độ dành cho nhà phát triển' (Developer mode) ở góc trên bên phải." -ForegroundColor White
+Write-Host "  2. Nhấn nút 'Tải tiện ích đã giải nén' (Load unpacked) ở góc trên bên trái." -ForegroundColor White
+Write-Host "  3. Chọn thư mục được đóng khung ở trên." -ForegroundColor Yellow
+Write-Host "=================================================================" -ForegroundColor Cyan
 Write-Host "Hoàn tất! Extension Translate for Slack đã sẵn sàng hoạt động." -ForegroundColor Green
