@@ -25,6 +25,7 @@ body {
 }
 
 .popup-header svg {
+  align-self: start;
   width: 22px;
   height: 22px;
   fill: none;
@@ -56,12 +57,33 @@ h1 {
 }
 
 .header-row h1,
-.header-row button {
+.header-row button,
+.header-row a {
   white-space: nowrap;
 }
 
-.header-row button {
+.header-row button,
+.header-row .update-guide-button {
   margin-left: auto;
+}
+
+.update-guide-button {
+  display: inline-block;
+  padding: 4px 7px;
+  color: #fff;
+  background: #1264a3;
+  border-radius: 4px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.update-guide-button[hidden] {
+  display: none;
+}
+
+.update-guide-button:hover,
+.update-guide-button:focus-visible {
+  background: #0b4d81;
 }
 
 small {
@@ -92,8 +114,10 @@ h2 {
 }
 
 .update-notice {
-  margin-top: 10px;
-  padding: 10px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 2px;
+  padding: 12px;
   background: #fff7e8;
   border: 1px solid #e7c681;
   border-radius: 5px;
@@ -101,13 +125,26 @@ h2 {
   line-height: 1.4;
 }
 
+.update-notice-heading,
+.update-command-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.update-notice-heading span,
+.update-command-heading span {
+  font-size: 11px;
+}
+
 .update-notice p {
-  margin-top: 5px;
+  margin-top: 7px;
 }
 
 .update-platform-label {
   display: block;
-  margin-top: 9px;
+  margin-top: 12px;
 }
 
 .update-platform {
@@ -115,33 +152,36 @@ h2 {
   margin-top: 4px;
 }
 
-.update-command-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: 7px;
+.update-command {
+  margin-top: 10px;
 }
 
-.update-command-row code {
-  flex: 1;
-  min-width: 0;
-  padding: 6px;
-  overflow-wrap: anywhere;
-  background: rgb(0 0 0 / 6%);
-  border-radius: 4px;
-  user-select: text;
+.update-command-heading {
+  margin-bottom: 6px;
 }
 
-.update-command-row button {
-  flex: none;
-  padding: 5px 7px;
+.update-command-heading button {
+  padding: 4px 8px;
   font-size: 11px;
 }
 
-.update-notice a {
-  display: inline-block;
-  margin-top: 7px;
-  color: #1264a3;
+.update-command code {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px;
+  overflow-wrap: anywhere;
+  background: rgb(0 0 0 / 6%);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.update-notice .update-next-step {
+  margin-top: 12px;
+  padding-top: 9px;
+  border-top: 1px solid rgb(0 0 0 / 12%);
 }
 
 .toggle-row,
@@ -557,12 +597,25 @@ footer {
     border-color: #836b38;
   }
 
-  .update-command-row code {
+  .update-command code {
     background: rgb(255 255 255 / 10%);
   }
 
-  .update-notice a,
+  .update-notice .update-next-step {
+    border-color: rgb(255 255 255 / 16%);
+  }
+
   .text-button {
     color: #8bc7ed;
+  }
+
+  .update-guide-button {
+    color: #16202a;
+    background: #8bc7ed;
+  }
+
+  .update-guide-button:hover,
+  .update-guide-button:focus-visible {
+    background: #b4ddf5;
   }
 }

@@ -59,6 +59,7 @@ export async function initPopup(doc = document) {
   const updateNotice = doc.getElementById('updateNotice');
   const updateVersion = doc.getElementById('updateVersion');
   const checkForUpdatesButton = doc.getElementById('checkForUpdates');
+  const updateGuideLink = doc.getElementById('updateGuideLink');
   const updatePlatform = doc.getElementById('updatePlatform');
   const updateTerminalGuide = doc.getElementById('updateTerminalGuide');
   const updateCommand = doc.getElementById('updateCommand');
@@ -203,6 +204,8 @@ export async function initPopup(doc = document) {
       }
       const available = state?.updateAvailable === true;
       if (updateNotice) updateNotice.hidden = !available;
+      if (checkForUpdatesButton) checkForUpdatesButton.hidden = available;
+      if (updateGuideLink) updateGuideLink.hidden = !available;
       if (available && updateVersion) updateVersion.textContent = `Bản mới: ${state.latestVersion}`;
     } catch {
       updateStatus.textContent = `v${installedVersion} · Không thể kiểm tra bản mới.`;

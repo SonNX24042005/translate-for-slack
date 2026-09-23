@@ -15,24 +15,29 @@
             <h1>Dịch tin nhắn Slack</h1>
             <p id="updateStatus" class="update-status" role="status" aria-live="polite">v…</p>
             <button id="checkForUpdates" type="button" class="text-button">Kiểm tra cập nhật</button>
+            <a id="updateGuideLink" class="update-guide-button" href="https://github.com/SonNX24042005/translate-for-slack/blob/main/README.md#c%E1%BA%ADp-nh%E1%BA%ADt-ti%E1%BB%87n-%C3%ADch" target="_blank" rel="noopener noreferrer" aria-label="Xem hướng dẫn cập nhật trong README" hidden>Cập nhật →</a>
           </div>
-          <div id="updateNotice" class="update-notice" hidden>
+        </div>
+        <div id="updateNotice" class="update-notice" hidden>
+          <div class="update-notice-heading">
             <strong>Đã có bản cập nhật</strong>
-            <p id="updateVersion"></p>
-            <label class="update-platform-label" for="updatePlatform">Hệ điều hành</label>
-            <select id="updatePlatform" class="update-platform">
-              <option value="windows">Windows</option>
-              <option value="linux">Linux</option>
-              <option value="macos">macOS</option>
-            </select>
-            <p id="updateTerminalGuide"></p>
-            <div class="update-command-row">
-              <code id="updateCommand"></code>
+            <span id="updateVersion"></span>
+          </div>
+          <label class="update-platform-label" for="updatePlatform">Hệ điều hành</label>
+          <select id="updatePlatform" class="update-platform">
+            <option value="windows">Windows</option>
+            <option value="linux">Linux</option>
+            <option value="macos">macOS</option>
+          </select>
+          <p id="updateTerminalGuide"></p>
+          <div class="update-command">
+            <div class="update-command-heading">
+              <span>Lệnh cập nhật</span>
               <button id="copyUpdateCommand" type="button">Sao chép</button>
             </div>
-            <p>Dán lệnh vào terminal rồi nhấn Enter. Sau khi cập nhật, mở trang quản lý tiện ích, nhấn <strong>Tải lại</strong> cho Translate for Slack và tải lại trang Slack đang mở.</p>
-            <a href="https://github.com/SonNX24042005/translate-for-slack#c%E1%BA%ADp-nh%E1%BA%ADt-ti%E1%BB%87n-%C3%ADch" target="_blank" rel="noreferrer">Xem hướng dẫn đầy đủ →</a>
+            <code id="updateCommand"></code>
           </div>
+          <p class="update-next-step">Dán lệnh vào terminal và nhấn Enter. Sau đó, tải lại tiện ích trong trang quản lý và tải lại trang Slack đang mở.</p>
         </div>
       </header>
 
