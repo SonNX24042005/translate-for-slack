@@ -17,9 +17,9 @@ import {
 
 let feedbackTimer = null;
 const UPDATE_COMMANDS = {
-  windows: 'irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.ps1 | iex',
-  linux: 'curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.sh | bash',
-  macos: 'curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.sh | bash'
+  windows: 'irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/scripts/update.ps1 | iex',
+  linux: 'curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/scripts/update.sh | bash',
+  macos: 'curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/scripts/update.sh | bash'
 };
 const UPDATE_TERMINAL_GUIDES = {
   windows: 'Nhấn phím Windows, gõ PowerShell rồi nhấn Enter để mở terminal.',

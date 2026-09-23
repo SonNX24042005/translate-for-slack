@@ -23,12 +23,12 @@ Extension hỗ trợ thu thập và dịch các cuộc trò chuyện trên Slack
 
 - Trên Linux hoặc macOS:
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/scripts/install.sh | bash
   ```
 
 - Trên Windows (PowerShell):
   ```powershell
-  irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/install.ps1 | iex
+  irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/scripts/install.ps1 | iex
   ```
 
 *Lệnh trên sẽ tự động tải mã nguồn, sao chép sẵn địa chỉ trang quản lý tiện ích vào bộ nhớ tạm (clipboard) và mở trình duyệt. Thư mục cài mặc định là `~/.local/share/translate-for-slack` trên Linux, `~/Library/Application Support/translate-for-slack` trên macOS và `%LOCALAPPDATA%\translate-for-slack` trên Windows.*
@@ -45,11 +45,11 @@ Tiện ích kiểm tra phiên bản trên kho công khai mỗi 24 giờ. Khi có
 
 - Trên Linux hoặc macOS, mở Terminal từ menu ứng dụng rồi chạy:
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/scripts/update.sh | bash
   ```
 - Trên Windows, nhấn phím Windows, gõ PowerShell, nhấn Enter rồi chạy:
   ```powershell
-  irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.ps1 | iex
+  irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/scripts/update.ps1 | iex
   ```
 
 Lệnh tự tìm thư mục cài mới hoặc thư mục cài cũ trong Downloads. Bản cài cũ được cập nhật tại chỗ để trình duyệt tiếp tục dùng đúng đường dẫn đã tải. Nếu đã cài bằng Git, lệnh dùng `git pull --ff-only`; nếu cài từ tệp zip, lệnh tải bản zip mới và thay thư mục tiện ích. Sau đó mở trang quản lý tiện ích (`chrome://extensions`, `edge://extensions` hoặc trang tương ứng), nhấn **Tải lại** trên tiện ích và tải lại các trang Slack đang mở. Dữ liệu được lưu trong bộ nhớ trình duyệt sẽ không bị xóa khi tải lại.
