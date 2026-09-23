@@ -72,6 +72,7 @@ let currentConfig = {
   messageStoreMaxPerConversation: 1000,
   messageStoreMaxMegabytes: 50,
   geminiApiKey: '',
+  geminiApiKeys: [],
   geminiModel: 'gemini-3.8-flash',
   targetLanguageName: 'Vietnamese',
   targetLanguageCode: 'vi'
@@ -1043,7 +1044,7 @@ export async function translateStoredConversation(rootNode = globalThis.document
   const context = getSlackConversationContext(rootNode);
   if (!context) throw new Error('Không xác định được channel hoặc DM hiện tại.');
   const config = { ...currentConfig, ...(options.config || {}) };
-  if (!String(config.geminiModel || '').trim()) throw new Error('Hãy nhập model Gemini trong popup.');
+  if (!String(config.geminiModel || '').trim()) throw new Error('Hãy chọn model Gemini trong popup.');
   if (!String(config.targetLanguageName || '').trim() || !String(config.targetLanguageCode || '').trim()) {
     throw new Error('Hãy nhập tên và mã ngôn ngữ đích trong popup.');
   }
@@ -1106,7 +1107,9 @@ export async function translateStoredConversation(rootNode = globalThis.document
       skipped: messages.length
     };
   }
-  if (!String(config.geminiApiKey || '').trim()) throw new Error('Hãy nhập khóa API Gemini trong popup.');
+  if (!config.geminiApiKeys?.length && !String(config.geminiApiKey || '').trim()) {
+    throw new Error('Hãy thêm khóa API Gemini trong popup.');
+  }
   const documentNode = rootNode?.nodeType === 9 ? rootNode : (rootNode?.ownerDocument || globalThis.document);
   const configuredRetryDelay = Number(options.retryBaseDelayMs);
   const retryBaseDelayMs = Number.isFinite(configuredRetryDelay) && configuredRetryDelay >= 0

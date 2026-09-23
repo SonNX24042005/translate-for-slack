@@ -7,6 +7,8 @@ import {
 } from '../common/message_store.js';
 import { clearTranslationStore } from '../common/translation_store.js';
 import { clearChannelContextStore } from '../common/channel_context_store.js';
+import { GEMINI_MODELS, resolveGeminiModel } from '../common/gemini_models.js';
+import { API_KEY_USAGE_STORAGE_KEY, getApiKeyUsage, pacificDay } from '../common/api_key_usage.js';
 import {
   createLanguageChoices,
   filterLanguageChoices,
@@ -19,6 +21,10 @@ export async function initPopup(doc = document) {
   if (!doc) return;
   const enabled = doc.getElementById('storeOriginalMessages');
   const apiKey = doc.getElementById('geminiApiKey');
+  const addApiKeyButton = doc.getElementById('addApiKey');
+  const showApiKeysButton = doc.getElementById('showApiKeys');
+  const apiKeyCount = doc.getElementById('apiKeyCount');
+  const apiKeyDetails = doc.getElementById('apiKeyDetails');
   const model = doc.getElementById('geminiModel');
   const languagePicker = doc.getElementById('targetLanguagePicker');
   const languageSearch = doc.getElementById('targetLanguageSearch');
@@ -39,6 +45,70 @@ export async function initPopup(doc = document) {
   let filteredLanguages = languageChoices;
   let activeLanguageIndex = -1;
   let loading = true;
+
+  async function refreshApiKeys() {
+    const keys = (await getConfig()).geminiApiKeys;
+    if (apiKeyCount) apiKeyCount.textContent = keys.length ? `Đã lưu ${keys.length} khóa API` : 'Chưa có khóa API';
+    if (showApiKeysButton) showApiKeysButton.disabled = keys.length === 0;
+    if (keys.length === 0 && apiKeyDetails && !apiKeyDetails.hidden) {
+      apiKeyDetails.hidden = true;
+      showApiKeysButton.setAttribute('aria-expanded', 'false');
+      showApiKeysButton.textContent = 'Xem chi tiết khóa API';
+    }
+    if (!apiKeyDetails || apiKeyDetails.hidden) return;
+    const usage = await getApiKeyUsage(keys);
+    const note = doc.createElement('p');
+    note.className = 'api-key-note';
+    note.textContent = `Lượt gửi ngày ${pacificDay()} theo giờ Thái Bình Dương trên trình duyệt này. Gemini áp hạn mức thực tế theo dự án.`;
+    const cards = usage.map(({ key, counts }, index) => {
+      const card = doc.createElement('div');
+      card.className = 'api-key-card';
+      const cardHeader = doc.createElement('div');
+      cardHeader.className = 'api-key-card-header';
+      const header = doc.createElement('strong');
+      header.textContent = `Khóa ${index + 1} · ••••${key.slice(-4)}`;
+      const remove = doc.createElement('button');
+      remove.type = 'button';
+      remove.className = 'api-key-remove';
+      remove.textContent = 'Xóa';
+      remove.setAttribute('aria-label', `Xóa khóa API ${index + 1}`);
+      remove.addEventListener('click', async () => {
+        remove.disabled = true;
+        try {
+          const current = (await getConfig()).geminiApiKeys;
+          await setConfig({ geminiApiKeys: current.filter((value) => value !== key), geminiApiKey: '' });
+          await refreshApiKeys();
+          showFeedback('✓ Đã xóa khóa API');
+        } catch {
+          remove.disabled = false;
+          showStatus('Không thể xóa khóa API. Vui lòng thử lại.', 'error');
+        }
+      });
+      cardHeader.append(header, remove);
+      card.append(cardHeader);
+      for (const modelEntry of GEMINI_MODELS) {
+        const row = doc.createElement('div');
+        row.className = 'api-key-usage-row';
+        const label = doc.createElement('span');
+        label.textContent = modelEntry.label;
+        const count = doc.createElement('span');
+        count.textContent = `${counts[modelEntry.id] || 0}/${modelEntry.rpd} RPD`;
+        row.append(label, count);
+        card.append(row);
+      }
+      return card;
+    });
+    apiKeyDetails.replaceChildren(note, ...cards);
+  }
+
+  if (model) {
+    model.replaceChildren(...GEMINI_MODELS.map((entry) => {
+      const option = doc.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.label;
+      return option;
+    }));
+  }
 
   async function refreshUpdateStatus(force = false) {
     if (!updateStatus || !chrome.runtime?.getManifest || !chrome.runtime?.sendMessage) return;
@@ -184,8 +254,7 @@ export async function initPopup(doc = document) {
       storeOriginalMessages: enabled?.checked !== false,
       messageStoreMaxPerConversation: limits.maxMessagesPerConversation,
       messageStoreMaxMegabytes: limits.maxTotalMegabytes,
-      geminiApiKey: apiKey?.value.trim() || '',
-      geminiModel: model?.value.trim() || '',
+      geminiModel: resolveGeminiModel(model?.value).id,
       targetLanguageName: selectedLanguage.name,
       targetLanguageCode: selectedLanguage.code
     };
@@ -198,8 +267,8 @@ export async function initPopup(doc = document) {
 
   const config = await getConfig();
   if (enabled) enabled.checked = config.storeOriginalMessages !== false;
-  if (apiKey) apiKey.value = config.geminiApiKey || '';
-  if (model) model.value = config.geminiModel || '';
+  if (apiKey) apiKey.value = '';
+  if (model) model.value = resolveGeminiModel(config.geminiModel).id;
   selectedLanguage = resolveLanguageOption(config);
   if (languageSearch) languageSearch.value = selectedLanguageLabel();
   renderLanguageOptions();
@@ -208,11 +277,54 @@ export async function initPopup(doc = document) {
   updateDisabledState();
   await refreshUsage();
   loading = false;
+  await refreshApiKeys();
   void refreshUpdateStatus();
   checkForUpdatesButton?.addEventListener('click', () => refreshUpdateStatus(true));
 
   enabled?.addEventListener('change', () => save());
-  apiKey?.addEventListener('change', () => save());
+  async function addApiKey() {
+    const value = apiKey?.value.trim() || '';
+    if (!value) {
+      showStatus('Hãy nhập khóa API cần thêm.', 'error');
+      return;
+    }
+    addApiKeyButton.disabled = true;
+    try {
+      const keys = (await getConfig()).geminiApiKeys;
+      if (keys.includes(value)) {
+        showStatus('Khóa API này đã được lưu.', 'error');
+        return;
+      }
+      await setConfig({ geminiApiKeys: [...keys, value], geminiApiKey: '' });
+      apiKey.value = '';
+      if (status) status.hidden = true;
+      await refreshApiKeys();
+      showFeedback('✓ Đã thêm khóa API');
+    } catch {
+      showStatus('Không thể lưu khóa API. Vui lòng thử lại.', 'error');
+    } finally {
+      addApiKeyButton.disabled = false;
+    }
+  }
+
+  addApiKeyButton?.addEventListener('click', addApiKey);
+  apiKey?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void addApiKey();
+    }
+  });
+  showApiKeysButton?.addEventListener('click', () => {
+    apiKeyDetails.hidden = !apiKeyDetails.hidden;
+    showApiKeysButton.setAttribute('aria-expanded', String(!apiKeyDetails.hidden));
+    showApiKeysButton.textContent = apiKeyDetails.hidden ? 'Xem chi tiết khóa API' : 'Ẩn chi tiết khóa API';
+    void refreshApiKeys();
+  });
+  chrome.storage?.onChanged?.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes?.[API_KEY_USAGE_STORAGE_KEY] && !apiKeyDetails?.hidden) {
+      void refreshApiKeys();
+    }
+  });
   model?.addEventListener('change', () => save());
   languageSearch?.addEventListener('focus', () => {
     languageSearch.select();
@@ -259,7 +371,12 @@ export async function initPopup(doc = document) {
     const defaults = await resetConfig();
     loading = true;
     if (enabled) enabled.checked = defaults.storeOriginalMessages;
-    if (apiKey) apiKey.value = defaults.geminiApiKey;
+    if (apiKey) apiKey.value = '';
+    if (apiKeyDetails) apiKeyDetails.hidden = true;
+    if (showApiKeysButton) {
+      showApiKeysButton.setAttribute('aria-expanded', 'false');
+      showApiKeysButton.textContent = 'Xem chi tiết khóa API';
+    }
     if (model) model.value = defaults.geminiModel;
     selectedLanguage = resolveLanguageOption(defaults);
     if (languageSearch) languageSearch.value = selectedLanguageLabel();
@@ -268,7 +385,8 @@ export async function initPopup(doc = document) {
     if (totalMegabytes) totalMegabytes.value = String(defaults.messageStoreMaxMegabytes);
     loading = false;
     updateDisabledState();
-    showStatus('Đã đặt lại giới hạn lưu trữ.');
+    await refreshApiKeys();
+    showStatus('Đã đặt lại cấu hình và xóa các khóa API đã lưu.');
   });
 }
 

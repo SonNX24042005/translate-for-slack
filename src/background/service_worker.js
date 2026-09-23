@@ -1,4 +1,6 @@
 import { getConfig } from '../common/storage.js';
+import { getGeminiModel } from '../common/gemini_models.js';
+import { reserveApiKey } from '../common/api_key_usage.js';
 import { checkForUpdates, initializeUpdateChecks, UPDATE_ALARM_NAME } from './update_checker.js';
 
 const TRANSLATE_MESSAGE_TYPE = 'tfs:translate-all-with-gemini';
@@ -22,11 +24,16 @@ async function readErrorMessage(response) {
 
 export async function requestGeminiTranslation(prompt, inputConfig = {}) {
   const config = { ...(await getConfig()), ...inputConfig };
-  const apiKey = String(config.geminiApiKey || '').trim();
+  const keys = inputConfig.geminiApiKey
+    ? [String(inputConfig.geminiApiKey).trim()]
+    : config.geminiApiKeys;
   const model = String(config.geminiModel || '').trim();
-  if (!apiKey) throw new Error('Chưa cấu hình khóa API Gemini trong popup.');
+  if (!keys?.length) throw new Error('Chưa có khóa API Gemini. Hãy thêm khóa trong popup.');
   if (!model) throw new Error('Chưa cấu hình model Gemini trong popup.');
+  if (!getGeminiModel(model)) throw new Error('Model Gemini không được hỗ trợ. Hãy chọn model trong popup.');
   if (!prompt) throw new Error('Không có nội dung để gửi đến Gemini.');
+
+  const apiKey = await reserveApiKey(keys, model);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

@@ -33,16 +33,24 @@
       <section aria-labelledby="gemini-heading">
         <h2 id="gemini-heading">Cấu hình Gemini</h2>
         <div class="form-grid">
-          <label>
-            <span class="label-header">
-              Khóa API Gemini
+          <div class="api-key-field">
+            <div class="label-header">
+              <label for="geminiApiKey">Khóa API Gemini</label>
               <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" class="api-key-link">Lấy khóa API tại Google AI Studio</a>
-            </span>
-            <input id="geminiApiKey" type="password" autocomplete="off" placeholder="Nhập khóa API" />
-          </label>
+            </div>
+            <div class="api-key-input-row">
+              <input id="geminiApiKey" type="password" autocomplete="off" placeholder="Nhập khóa API mới" />
+              <button id="addApiKey" type="button">Thêm khóa</button>
+            </div>
+            <div class="api-key-actions">
+              <span id="apiKeyCount" aria-live="polite">Chưa có khóa API</span>
+              <button id="showApiKeys" type="button" class="text-button" aria-expanded="false" aria-controls="apiKeyDetails">Xem chi tiết khóa API</button>
+            </div>
+            <div id="apiKeyDetails" class="api-key-details" hidden></div>
+          </div>
           <label>
             Model
-            <input id="geminiModel" type="text" spellcheck="false" value="gemini-3.8-flash" />
+            <select id="geminiModel"></select>
           </label>
           <div class="language-field">
             <label for="targetLanguageSearch">Ngôn ngữ đích</label>

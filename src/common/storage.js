@@ -1,6 +1,7 @@
 // Storage abstraction for message collection settings.
 
 import { DEFAULT_CONFIG } from './constants.js';
+import { resolveGeminiModel } from './gemini_models.js';
 
 // In-memory store used when chrome.storage.local is unavailable (e.g. in test environments).
 let memoryStore = { ...DEFAULT_CONFIG };
@@ -17,6 +18,18 @@ function pickSupportedConfig(value = {}) {
       .filter((key) => Object.prototype.hasOwnProperty.call(value, key))
       .map((key) => [key, value[key]])
   );
+}
+
+function normalizeConfig(config) {
+  const keys = Array.isArray(config.geminiApiKeys)
+    ? config.geminiApiKeys.filter((key) => typeof key === 'string').map((key) => key.trim()).filter(Boolean)
+    : [];
+  const legacyKey = String(config.geminiApiKey || '').trim();
+  return {
+    ...config,
+    geminiApiKeys: [...new Set(keys.length ? keys : (legacyKey ? [legacyKey] : []))],
+    geminiModel: resolveGeminiModel(config.geminiModel).id
+  };
 }
 
 // Write queue for serializing concurrent configuration mutations.
@@ -68,14 +81,14 @@ export function isChromeStorageAvailable() {
  */
 export async function getConfig() {
   if (!isChromeStorageAvailable()) {
-    return { ...DEFAULT_CONFIG, ...memoryStore };
+    return normalizeConfig({ ...DEFAULT_CONFIG, ...memoryStore });
   }
 
   return new Promise((resolve) => {
     chrome.storage.local.get(null, (items) => {
       if (chrome.runtime?.lastError) {
         // Fallback to memory store or defaults if reading failed
-        resolve({ ...DEFAULT_CONFIG, ...memoryStore });
+        resolve(normalizeConfig({ ...DEFAULT_CONFIG, ...memoryStore }));
         return;
       }
 
@@ -89,11 +102,11 @@ export async function getConfig() {
         : {};
       const merged = {
         ...DEFAULT_CONFIG,
-        ...pickSupportedConfig(storedConfig),
-        ...pickSupportedConfig(rootConfig)
+        ...pickSupportedConfig(rootConfig),
+        ...pickSupportedConfig(storedConfig)
       };
 
-      resolve(merged);
+      resolve(normalizeConfig(merged));
     });
   });
 }
@@ -115,10 +128,10 @@ export async function setConfig(partialConfig) {
     }
 
     const current = await getConfig();
-    const updated = {
+    const updated = normalizeConfig({
       ...current,
       ...pickSupportedConfig(partialConfig)
-    };
+    });
 
     memoryStore = { ...updated };
 

@@ -135,11 +135,83 @@ footer {
 
 .limits label,
 .form-grid > label,
-.language-field {
+.language-field,
+.api-key-field {
   display: grid;
   gap: 6px;
   color: #454245;
   font-size: 12px;
+}
+
+.api-key-input-row,
+.api-key-actions,
+.api-key-card-header,
+.api-key-usage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.api-key-input-row input {
+  flex: 1;
+}
+
+.api-key-input-row button {
+  white-space: nowrap;
+}
+
+.api-key-actions {
+  color: #616061;
+  font-size: 11px;
+}
+
+.api-key-details {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.api-key-details[hidden] {
+  display: none;
+}
+
+.api-key-card {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: #f8f8f8;
+}
+
+.api-key-card-header {
+  margin-bottom: 6px;
+}
+
+.api-key-remove {
+  padding: 2px 5px;
+  color: #b4152b;
+  background: transparent;
+  border: 0;
+  font-size: 11px;
+}
+
+.api-key-remove:hover {
+  text-decoration: underline;
+}
+
+.api-key-usage-row {
+  padding: 3px 0;
+}
+
+.api-key-usage-row span:last-child {
+  white-space: nowrap;
+}
+
+.api-key-note {
+  color: #616061;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .label-header {
@@ -160,7 +232,8 @@ footer {
 
 input[type="number"],
 input[type="text"],
-input[type="password"] {
+input[type="password"],
+select {
   box-sizing: border-box;
   min-width: 0;
   padding: 8px;
@@ -168,6 +241,16 @@ input[type="password"] {
   background: transparent;
   border: 1px solid #bbbabb;
   border-radius: 5px;
+}
+
+select {
+  color-scheme: light;
+  background: #fff;
+}
+
+select option {
+  color: #1d1c1d;
+  background: #fff;
 }
 
 .language-picker,
@@ -326,6 +409,8 @@ footer {
   small,
   .hint,
   .usage-row,
+  .form-grid > label,
+  .api-key-field,
   .limits label,
   .language-field {
     color: #c7c7c7;
@@ -333,6 +418,32 @@ footer {
 
   .api-key-link {
     color: #1d9bd1;
+  }
+
+  .api-key-actions,
+  .api-key-note {
+    color: #c7c7c7;
+  }
+
+  .api-key-card {
+    background: #222529;
+    border-color: #565856;
+  }
+
+  .api-key-remove {
+    color: #ff8fa0;
+  }
+
+  select {
+    color-scheme: dark;
+    color: #f8f8f8;
+    background: #222529;
+    border-color: #565856;
+  }
+
+  select option {
+    color: #f8f8f8;
+    background: #222529;
   }
 
   .language-options {

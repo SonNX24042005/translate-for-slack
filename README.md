@@ -60,9 +60,15 @@ Khi phát hành bản mới, hãy tăng `version` trong `manifest.json`, `packag
 
 **Bước 2: Cấu hình extension**
 1. Nhấn vào biểu tượng extension trên thanh công cụ của trình duyệt để mở popup.
-2. Dán khóa API vừa sao chép vào ô **Khóa API Gemini** (bạn cũng có thể bấm vào dòng *Lấy khóa API tại Google AI Studio* ngay trên giao diện popup để mở trang tạo khóa):
+2. Dán khóa API vừa sao chép vào ô **Khóa API Gemini** rồi nhấn **Thêm khóa**. Ô nhập sẽ trống để bạn thêm khóa khác (bạn cũng có thể bấm vào dòng *Lấy khóa API tại Google AI Studio* ngay trên giao diện popup để mở trang tạo khóa):
    ![Dán khóa API vào popup extension](docs/images/api_key_step4.png)
-3. Lựa chọn model (mặc định: `gemini-3.8-flash`) và thiết lập ngôn ngữ đích cần dịch.
+3. Chọn một trong sáu model Gemini có sẵn (mặc định: `gemini-3.8-flash`) và thiết lập ngôn ngữ đích cần dịch. Hạn mức RPD theo ảnh được lưu cùng danh sách model trong mã nguồn; hạn mức thực tế có thể thay đổi theo dự án và được xem trong Google AI Studio.
+
+### Nhiều khóa API và bộ đếm RPD
+
+Popup cho phép thêm nhiều khóa API, xóa khóa không còn dùng và xem lượt gửi/giới hạn RPD của từng model theo từng khóa qua **Xem chi tiết khóa API**. Khóa chỉ được hiển thị dưới dạng đã che. Mỗi lần gửi yêu cầu sẽ tăng bộ đếm cục bộ, kể cả khi yêu cầu thất bại. Khi một khóa đạt mức RPD của model, tiện ích tự dùng khóa tiếp theo; nếu tất cả đều đạt mức thì dừng và báo lỗi. Bộ đếm đặt lại theo nửa đêm giờ Thái Bình Dương.
+
+[Gemini áp hạn mức thực tế theo dự án, không theo từng khóa API](https://ai.google.dev/gemini-api/docs/rate-limits). Vì vậy, nhiều khóa thuộc cùng một dự án vẫn chia sẻ hạn mức của Google; bộ đếm trong tiện ích chỉ phản ánh các yêu cầu đã gửi từ trình duyệt này.
 
 ### 3. Sử dụng trên Slack
 1. Truy cập Slack trên trình duyệt web.
