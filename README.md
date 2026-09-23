@@ -61,7 +61,7 @@ Khi phát hành bản mới, hãy tăng `version` trong `manifest.json`, `packag
 **Bước 2: Cấu hình extension**
 1. Nhấn vào biểu tượng extension trên thanh công cụ của trình duyệt để mở popup.
 2. Dán khóa API vừa sao chép vào ô **Khóa API Gemini** rồi nhấn **Thêm khóa**. Ô nhập sẽ trống để bạn thêm khóa khác (bạn cũng có thể bấm vào dòng *Lấy khóa API tại Google AI Studio* ngay trên giao diện popup để mở trang tạo khóa):
-   ![Dán khóa API vào popup extension](docs/images/api_key_step4.png)
+   ![Popup cấu hình extension bản 1.2.8](docs/images/api_key_step4.png)
 3. Chọn một trong sáu model Gemini có sẵn (mặc định: `gemini-3.5-flash-lite`) và thiết lập ngôn ngữ đích cần dịch. Danh sách hiển thị tên bản địa của ngôn ngữ và vẫn tìm được bằng tên tiếng Anh hoặc tiếng Việt. Khi cập nhật lên bản này, lựa chọn model cũ được chuyển một lần sang model mặc định; sau đó bạn có thể chọn lại model khác. Hạn mức RPD theo ảnh được lưu cùng danh sách model trong mã nguồn; hạn mức thực tế có thể thay đổi theo dự án và được xem trong Google AI Studio.
 
 ### Nhiều khóa API và bộ đếm RPD
