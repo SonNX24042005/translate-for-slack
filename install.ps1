@@ -3,7 +3,7 @@
 param (
     [string]$RepoUrl = "https://github.com/SonNX24042005/translate-for-slack.git",
     [string]$ZipUrl = "https://github.com/SonNX24042005/translate-for-slack/archive/refs/heads/main.zip",
-    [string]$InstallDir = "$HOME\Downloads\translate-for-slack"
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "translate-for-slack")
 )
 
 $OutputEncoding = [System.Text.Encoding]::UTF8

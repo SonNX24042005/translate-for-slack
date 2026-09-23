@@ -3,7 +3,12 @@ set -e
 
 REPO_URL="${REPO_URL:-https://github.com/SonNX24042005/translate-for-slack.git}"
 ZIP_URL="https://github.com/SonNX24042005/translate-for-slack/archive/refs/heads/main.zip"
-INSTALL_DIR="${INSTALL_DIR:-$HOME/Downloads/translate-for-slack}"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  DEFAULT_INSTALL_DIR="$HOME/Library/Application Support/translate-for-slack"
+else
+  DEFAULT_INSTALL_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/translate-for-slack"
+fi
+INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
 
 echo "=========================================="
 echo "  Cài đặt tiện ích Translate for Slack"

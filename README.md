@@ -31,7 +31,7 @@ Extension hỗ trợ thu thập và dịch các cuộc trò chuyện trên Slack
   irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/install.ps1 | iex
   ```
 
-*Lệnh trên sẽ tự động tải mã nguồn, sao chép sẵn đường dẫn thư mục vào bộ nhớ tạm (clipboard) và mở trang quản lý tiện ích của trình duyệt.*
+*Lệnh trên sẽ tự động tải mã nguồn, sao chép sẵn địa chỉ trang quản lý tiện ích vào bộ nhớ tạm (clipboard) và mở trình duyệt. Thư mục cài mặc định là `~/.local/share/translate-for-slack` trên Linux, `~/Library/Application Support/translate-for-slack` trên macOS và `%LOCALAPPDATA%\translate-for-slack` trên Windows.*
 
 **Cách 2: Cài đặt thủ công**
 1. Tải mã nguồn về máy hoặc giải nén tệp zip.
@@ -41,9 +41,18 @@ Extension hỗ trợ thu thập và dịch các cuộc trò chuyện trên Slack
 
 ### Cập nhật tiện ích
 
-Tiện ích kiểm tra phiên bản trên kho công khai mỗi 24 giờ. Khi có phiên bản mới, biểu tượng tiện ích hiện huy hiệu `1` và popup hiển thị số phiên bản cùng hướng dẫn cập nhật. Bạn cũng có thể nhấn **Kiểm tra cập nhật** ở hàng tiêu đề của popup.
+Tiện ích kiểm tra phiên bản trên kho công khai mỗi 24 giờ. Khi có phiên bản mới, biểu tượng tiện ích hiện huy hiệu `1` và popup hiển thị số phiên bản, lệnh cập nhật có thể sao chép cùng hướng dẫn mở terminal cho Windows, Linux hoặc macOS. Bạn cũng có thể nhấn **Kiểm tra cập nhật** ở hàng tiêu đề của popup.
 
-Nếu đã cài bằng `git clone`, chạy `git pull --ff-only` trong thư mục tiện ích. Nếu cài từ tệp zip, tải lại mã nguồn từ [kho công khai](https://github.com/SonNX24042005/translate-for-slack), rồi thay nội dung thư mục tiện ích bằng bản mới. Cuối cùng, mở trang quản lý tiện ích (`chrome://extensions`, `edge://extensions` hoặc trang tương ứng của trình duyệt), nhấn **Tải lại** trên tiện ích và tải lại các trang Slack đang mở. Dữ liệu được lưu trong bộ nhớ trình duyệt sẽ không bị xóa khi tải lại.
+- Trên Linux hoặc macOS, mở Terminal từ menu ứng dụng rồi chạy:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.sh | bash
+  ```
+- Trên Windows, nhấn phím Windows, gõ PowerShell, nhấn Enter rồi chạy:
+  ```powershell
+  irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.ps1 | iex
+  ```
+
+Lệnh tự tìm thư mục cài mới hoặc thư mục cài cũ trong Downloads. Bản cài cũ được cập nhật tại chỗ để trình duyệt tiếp tục dùng đúng đường dẫn đã tải. Nếu đã cài bằng Git, lệnh dùng `git pull --ff-only`; nếu cài từ tệp zip, lệnh tải bản zip mới và thay thư mục tiện ích. Sau đó mở trang quản lý tiện ích (`chrome://extensions`, `edge://extensions` hoặc trang tương ứng), nhấn **Tải lại** trên tiện ích và tải lại các trang Slack đang mở. Dữ liệu được lưu trong bộ nhớ trình duyệt sẽ không bị xóa khi tải lại.
 
 Khi phát hành bản mới, hãy tăng `version` trong `manifest.json`, `package.json` và `package-lock.json`; trình kiểm tra dùng giá trị trong manifest để nhận biết bản cập nhật.
 

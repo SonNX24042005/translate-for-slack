@@ -16,6 +16,23 @@ import {
 } from './languages.js';
 
 let feedbackTimer = null;
+const UPDATE_COMMANDS = {
+  windows: 'irm https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.ps1 | iex',
+  linux: 'curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.sh | bash',
+  macos: 'curl -fsSL https://raw.githubusercontent.com/SonNX24042005/translate-for-slack/main/update.sh | bash'
+};
+const UPDATE_TERMINAL_GUIDES = {
+  windows: 'Nhấn phím Windows, gõ PowerShell rồi nhấn Enter để mở terminal.',
+  linux: 'Mở Terminal từ menu ứng dụng (thường có thể nhấn Ctrl+Alt+T).',
+  macos: 'Nhấn Command+Space, gõ Terminal rồi nhấn Enter.'
+};
+
+function detectUpdatePlatform(navigatorObject) {
+  const platform = `${navigatorObject?.userAgentData?.platform || navigatorObject?.platform || navigatorObject?.userAgent || ''}`;
+  if (/win/i.test(platform)) return 'windows';
+  if (/mac/i.test(platform)) return 'macos';
+  return 'linux';
+}
 
 export async function initPopup(doc = document) {
   if (!doc) return;
@@ -42,6 +59,10 @@ export async function initPopup(doc = document) {
   const updateNotice = doc.getElementById('updateNotice');
   const updateVersion = doc.getElementById('updateVersion');
   const checkForUpdatesButton = doc.getElementById('checkForUpdates');
+  const updatePlatform = doc.getElementById('updatePlatform');
+  const updateTerminalGuide = doc.getElementById('updateTerminalGuide');
+  const updateCommand = doc.getElementById('updateCommand');
+  const copyUpdateCommand = doc.getElementById('copyUpdateCommand');
   const languageChoices = createLanguageChoices('vi');
   let selectedLanguage = resolveLanguageOption();
   let filteredLanguages = languageChoices;
@@ -49,6 +70,34 @@ export async function initPopup(doc = document) {
   let loading = true;
   let selectedApiKey = '';
   let apiKeyRefreshId = 0;
+
+  function renderUpdateCommand() {
+    const platform = updatePlatform?.value || detectUpdatePlatform(doc.defaultView?.navigator);
+    if (updateTerminalGuide) updateTerminalGuide.textContent = UPDATE_TERMINAL_GUIDES[platform];
+    if (updateCommand) updateCommand.textContent = UPDATE_COMMANDS[platform];
+    if (copyUpdateCommand) copyUpdateCommand.textContent = 'Sao chép';
+  }
+
+  if (updatePlatform) {
+    updatePlatform.value = detectUpdatePlatform(doc.defaultView?.navigator);
+    updatePlatform.addEventListener('change', renderUpdateCommand);
+  }
+  renderUpdateCommand();
+  copyUpdateCommand?.addEventListener('click', async () => {
+    try {
+      await doc.defaultView.navigator.clipboard.writeText(updateCommand.textContent);
+      copyUpdateCommand.textContent = 'Đã sao chép';
+    } catch {
+      const selection = doc.defaultView?.getSelection();
+      if (selection && updateCommand) {
+        const range = doc.createRange();
+        range.selectNodeContents(updateCommand);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      copyUpdateCommand.textContent = updatePlatform?.value === 'macos' ? 'Nhấn Command+C' : 'Nhấn Ctrl+C';
+    }
+  });
 
   async function refreshApiKeys() {
     const refreshId = ++apiKeyRefreshId;

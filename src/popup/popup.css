@@ -105,6 +105,39 @@ h2 {
   margin-top: 5px;
 }
 
+.update-platform-label {
+  display: block;
+  margin-top: 9px;
+}
+
+.update-platform {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.update-command-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.update-command-row code {
+  flex: 1;
+  min-width: 0;
+  padding: 6px;
+  overflow-wrap: anywhere;
+  background: rgb(0 0 0 / 6%);
+  border-radius: 4px;
+  user-select: text;
+}
+
+.update-command-row button {
+  flex: none;
+  padding: 5px 7px;
+  font-size: 11px;
+}
+
 .update-notice a {
   display: inline-block;
   margin-top: 7px;
@@ -522,6 +555,10 @@ footer {
   .update-notice {
     background: #3a311f;
     border-color: #836b38;
+  }
+
+  .update-command-row code {
+    background: rgb(255 255 255 / 10%);
   }
 
   .update-notice a,
