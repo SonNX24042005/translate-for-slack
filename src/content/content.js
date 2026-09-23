@@ -3,6 +3,8 @@
 import { getConfig, subscribeConfigChange } from '../common/storage.js';
 import { getStoredConversationBundle, upsertOriginalMessages } from '../common/message_store.js';
 import { getCachedChannelContext, saveCachedChannelContext } from '../common/channel_context_store.js';
+import { API_KEY_RPD_EXHAUSTED_CODE } from '../common/api_key_usage.js';
+import { DEFAULT_GEMINI_MODEL } from '../common/gemini_models.js';
 import {
   getStoredTranslationsForConversation,
   translationIdentity,
@@ -26,6 +28,7 @@ const TRANSLATION_CONCURRENCY = 3;
 const TRANSLATION_MAX_ATTEMPTS = 5;
 const TRANSLATION_RETRY_BASE_DELAY_MS = 1000;
 const CONTROLS_COLLAPSED_STORAGE_KEY = '__tfsControlsCollapsedV1';
+const EXTENSION_RELOAD_MESSAGE = 'Hãy tải lại trang Slack để tiếp tục.';
 const MESSAGE_CONTENT_SELECTORS = [
   '[data-qa="message-text"]',
   '[data-qa="message_content"]',
@@ -73,7 +76,7 @@ let currentConfig = {
   messageStoreMaxMegabytes: 50,
   geminiApiKey: '',
   geminiApiKeys: [],
-  geminiModel: 'gemini-3.8-flash',
+  geminiModel: DEFAULT_GEMINI_MODEL,
   targetLanguageName: 'Vietnamese',
   targetLanguageCode: 'vi'
 };
@@ -91,9 +94,39 @@ let newTranslationControl = null;
 let controlsToggle = null;
 let translationApplyTimer = null;
 let translationRunning = false;
+let extensionContextInvalidated = false;
 let translationCacheConversation = '';
 let translationCache = new Map();
 const renderedMessageTranslations = new WeakMap();
+
+function isExtensionContextInvalidated(error) {
+  return error?.code === 'TFS_EXTENSION_CONTEXT_INVALIDATED'
+    || /Extension context invalidated/i.test(error?.message || '');
+}
+
+function normalizeExtensionError(error) {
+  if (!isExtensionContextInvalidated(error)) return error;
+  extensionContextInvalidated = true;
+  observer?.disconnect();
+  clearTimeout(storageTimer);
+  clearTimeout(translationApplyTimer);
+  clearTimeout(messageButtonTimer);
+  if (activeHistorySession) activeHistorySession.cancelToken.cancelled = true;
+  if (error?.code === 'TFS_EXTENSION_CONTEXT_INVALIDATED') return error;
+  const translated = new Error(EXTENSION_RELOAD_MESSAGE);
+  translated.code = 'TFS_EXTENSION_CONTEXT_INVALIDATED';
+  return translated;
+}
+
+function geminiResponseError(response, fallback) {
+  const error = new Error(response?.error || fallback);
+  if (response?.code) error.code = response.code;
+  return error;
+}
+
+function isRpdExhausted(error) {
+  return error?.code === API_KEY_RPD_EXHAUSTED_CODE;
+}
 
 function getRootLocation(rootNode) {
   return rootNode?.location
@@ -482,19 +515,22 @@ function mutationsOnlyTouchExtensionUi(records = []) {
 }
 
 function sendRuntimeMessage(message) {
+  if (extensionContextInvalidated) {
+    return Promise.reject(normalizeExtensionError(new Error('Extension context invalidated.')));
+  }
   return new Promise((resolve, reject) => {
     let settled = false;
     const done = (response) => {
       if (settled) return;
       settled = true;
-      if (chrome.runtime?.lastError) reject(new Error(chrome.runtime.lastError.message));
+      if (chrome.runtime?.lastError) reject(normalizeExtensionError(new Error(chrome.runtime.lastError.message)));
       else resolve(response);
     };
     try {
       const pending = chrome.runtime.sendMessage(message, done);
-      if (pending?.then) pending.then(done, reject);
+      if (pending?.then) pending.then(done, (error) => reject(normalizeExtensionError(error)));
     } catch (error) {
-      reject(error);
+      reject(normalizeExtensionError(error));
     }
   });
 }
@@ -508,14 +544,14 @@ function controlsStorageCall(method, value) {
     const done = (result) => {
       if (settled) return;
       settled = true;
-      if (chrome.runtime?.lastError) reject(new Error(chrome.runtime.lastError.message));
+      if (chrome.runtime?.lastError) reject(normalizeExtensionError(new Error(chrome.runtime.lastError.message)));
       else resolve(result ?? (method === 'get' ? {} : undefined));
     };
     try {
       const pending = chrome.storage.local[method](value, done);
-      if (pending?.then) pending.then(done, reject);
+      if (pending?.then) pending.then(done, (error) => reject(normalizeExtensionError(error)));
     } catch (error) {
-      reject(error);
+      reject(normalizeExtensionError(error));
     }
   });
 }
@@ -797,7 +833,10 @@ function updateHistoryControl(control, state, label) {
   const button = control.querySelector('button');
   const text = control.querySelector('.tfs-history-label');
   if (text) text.textContent = label;
-  if (button) button.setAttribute('aria-busy', state === 'running' ? 'true' : 'false');
+  if (button) {
+    button.disabled = extensionContextInvalidated;
+    button.setAttribute('aria-busy', state === 'running' ? 'true' : 'false');
+  }
 }
 
 function createHistoryControl(documentNode, options) {
@@ -817,6 +856,10 @@ function createHistoryControl(documentNode, options) {
   documentNode.body.appendChild(control);
 
   button.addEventListener('click', async () => {
+    if (extensionContextInvalidated) {
+      updateHistoryControl(control, 'error', EXTENSION_RELOAD_MESSAGE);
+      return;
+    }
     if (activeHistorySession) {
       activeHistorySession.cancelToken.cancelled = true;
       updateHistoryControl(activeHistorySession.control, 'running', 'Đang dừng…');
@@ -856,16 +899,21 @@ function createHistoryControl(documentNode, options) {
         }
       });
       if (result.cancelled) updateHistoryControl(control, 'idle', `Đã dừng • đã thấy ${result.visited} tin nhắn`);
-      else if (!result.success) updateHistoryControl(control, 'error', result.error || 'Không thể lưu lịch sử');
+      else if (!result.success) {
+        const error = normalizeExtensionError(new Error(result.error || 'Không thể lưu lịch sử'));
+        updateHistoryControl(control, 'error', error.message);
+      }
       else updateHistoryControl(control, 'success', `Đã lưu • đã thấy ${result.visited} tin nhắn`);
     } catch (error) {
-      updateHistoryControl(control, 'error', error?.message || 'Không thể lưu lịch sử');
+      updateHistoryControl(control, 'error', normalizeExtensionError(error)?.message || 'Không thể lưu lịch sử');
     } finally {
       if (activeHistorySession === session) activeHistorySession = null;
-      const timer = setTimeout(() => {
-        if (control.isConnected) updateHistoryControl(control, 'idle', options.label);
-      }, 5000);
-      historyControlResetTimers.set(control, timer);
+      if (!extensionContextInvalidated) {
+        const timer = setTimeout(() => {
+          if (control.isConnected) updateHistoryControl(control, 'idle', options.label);
+        }, 5000);
+        historyControlResetTimers.set(control, timer);
+      }
     }
   });
   return control;
@@ -984,7 +1032,7 @@ function updateTranslationControl(control, state, label) {
   const text = control.querySelector('.tfs-translation-label');
   if (text) text.textContent = label;
   if (button) {
-    button.disabled = state === 'running';
+    button.disabled = state === 'running' || extensionContextInvalidated;
     button.setAttribute('aria-busy', state === 'running' ? 'true' : 'false');
   }
 }
@@ -992,7 +1040,7 @@ function updateTranslationControl(control, state, label) {
 function setTranslationControlsDisabled(disabled) {
   for (const control of [translationControl, newTranslationControl]) {
     const button = control?.querySelector('button');
-    if (button) button.disabled = disabled;
+    if (button) button.disabled = disabled || extensionContextInvalidated;
   }
 }
 
@@ -1041,6 +1089,7 @@ export function selectMessageTranslationWindow(messages = [], eligibleKeys = new
 }
 
 export async function translateStoredConversation(rootNode = globalThis.document, options = {}) {
+  if (extensionContextInvalidated) throw normalizeExtensionError(new Error('Extension context invalidated.'));
   const context = getSlackConversationContext(rootNode);
   if (!context) throw new Error('Không xác định được channel hoặc DM hiện tại.');
   const config = { ...currentConfig, ...(options.config || {}) };
@@ -1140,6 +1189,7 @@ export async function translateStoredConversation(rootNode = globalThis.document
         options.onContextStatus?.({ phase: 'ready', cached: true });
       }
     } catch (error) {
+      if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
       channelContextWarning = `Không thể đọc cache context chung: ${error?.message || 'lỗi không xác định'}`;
     }
 
@@ -1153,20 +1203,24 @@ export async function translateStoredConversation(rootNode = globalThis.document
           retryBaseDelayMs: options.contextRetryBaseDelayMs ?? retryBaseDelayMs,
           request: async (prompt) => {
             const response = await sendRuntimeMessage({ type: 'tfs:translate-all-with-gemini', prompt });
-            if (!response?.success) throw new Error(response?.error || 'Không thể tạo context chung bằng Gemini.');
+            if (!response?.success) throw geminiResponseError(response, 'Không thể tạo context chung bằng Gemini.');
             return response.text;
           },
           onRequest: (status) => options.onContextRequest?.(status),
-          onRetry: (status) => options.onContextRetry?.(status)
+          onRetry: (status) => options.onContextRetry?.(status),
+          shouldRetry: (error) => !isExtensionContextInvalidated(error) && !isRpdExhausted(error)
         });
         channelContextWarning = '';
         try {
           await saveCachedChannelContext({ ...cacheIdentity, context: channelContext });
         } catch (error) {
+          if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
           channelContextWarning = `Đã tạo context nhưng không thể lưu cache: ${error?.message || 'lỗi không xác định'}`;
         }
         options.onContextStatus?.({ phase: 'ready', cached: false });
       } catch (error) {
+        if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
+        if (isRpdExhausted(error)) throw error;
         channelContext = null;
         channelContextWarning = `Không thể tạo context chung sau 5 lần thử: ${error?.message || 'lỗi không xác định'}`;
         options.onContextStatus?.({ phase: 'failed', error: channelContextWarning });
@@ -1208,7 +1262,7 @@ export async function translateStoredConversation(rootNode = globalThis.document
     });
 
     const response = await sendRuntimeMessage({ type: 'tfs:translate-all-with-gemini', prompt });
-    if (!response?.success) throw new Error(response?.error || 'Không thể dịch bằng Gemini.');
+    if (!response?.success) throw geminiResponseError(response, 'Không thể dịch bằng Gemini.');
     const validated = parseAndValidateBatchHtml(response.text, batchItems, documentNode);
     if (!validated.success) throw new Error(validated.error);
 
@@ -1228,7 +1282,7 @@ export async function translateStoredConversation(rootNode = globalThis.document
   };
 
   const worker = async () => {
-    while (nextBatchIndex < messageBatches.length) {
+    while (!extensionContextInvalidated && nextBatchIndex < messageBatches.length) {
       const batchIndex = nextBatchIndex++;
       const batchMessages = messageBatches[batchIndex];
       let translations = null;
@@ -1240,6 +1294,8 @@ export async function translateStoredConversation(rootNode = globalThis.document
           translations = await translateBatch(batchMessages, batchIndex, attempt);
           break;
         } catch (error) {
+          if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
+          if (isRpdExhausted(error)) throw error;
           lastError = error;
           if (attempt >= TRANSLATION_MAX_ATTEMPTS) break;
           const delayMs = retryBaseDelayMs * (2 ** (attempt - 1));
@@ -1323,7 +1379,7 @@ export async function translateStoredConversation(rootNode = globalThis.document
 
 function setMessageTranslationButtonsDisabled(rootNode, disabled) {
   rootNode.querySelectorAll?.('.tfs-message-translation-toggle').forEach((button) => {
-    button.disabled = disabled;
+    button.disabled = disabled || extensionContextInvalidated;
   });
 }
 
@@ -1335,6 +1391,7 @@ function syncMessageTranslationButton(button, item) {
   if (button.dataset.state !== 'idle') button.dataset.state = 'idle';
   if (button.textContent !== label) button.textContent = label;
   if (button.title !== title) button.title = title;
+  button.disabled = extensionContextInvalidated;
 }
 
 function bindMessageTranslationButton(button, initialItem, rootNode, initialMessageKey) {
@@ -1385,11 +1442,13 @@ function bindMessageTranslationButton(button, initialItem, rootNode, initialMess
       syncMessageTranslationButton(button, item);
     } catch (error) {
       button.dataset.state = 'error';
-      button.textContent = 'Dịch lỗi';
-      button.title = error?.message || 'Không thể dịch tin nhắn';
-      const timer = setTimeout(() => syncMessageTranslationButton(button, item), 5000);
-      timer.unref?.();
-      messageTranslationButtonResetTimers.set(button, timer);
+      button.textContent = isExtensionContextInvalidated(error) ? 'Tải lại Slack' : 'Dịch lỗi';
+      button.title = normalizeExtensionError(error)?.message || 'Không thể dịch tin nhắn';
+      if (!extensionContextInvalidated) {
+        const timer = setTimeout(() => syncMessageTranslationButton(button, item), 5000);
+        timer.unref?.();
+        messageTranslationButtonResetTimers.set(button, timer);
+      }
     } finally {
       translationRunning = false;
       setTranslationControlsDisabled(false);
@@ -1483,16 +1542,18 @@ function bindTranslationControl(control, documentNode, options = {}) {
         updateTranslationControl(control, 'success', `Đã dịch ${result.translated} tin nhắn`);
       }
     } catch (error) {
-      updateTranslationControl(control, 'error', error?.message || 'Không thể dịch tin nhắn');
+      updateTranslationControl(control, 'error', normalizeExtensionError(error)?.message || 'Không thể dịch tin nhắn');
     } finally {
       translationRunning = false;
       setTranslationControlsDisabled(false);
       setMessageTranslationButtonsDisabled(documentNode, false);
-      setTimeout(() => {
-        if (control.isConnected && control.dataset.state !== 'running') {
-          updateTranslationControl(control, 'idle', idleLabel);
-        }
-      }, 8000);
+      if (!extensionContextInvalidated) {
+        setTimeout(() => {
+          if (control.isConnected && control.dataset.state !== 'running') {
+            updateTranslationControl(control, 'idle', idleLabel);
+          }
+        }, 8000);
+      }
     }
   });
 }
@@ -1627,8 +1688,14 @@ export function _setCurrentConfigForTesting(config = {}) {
   currentConfig = { ...currentConfig, ...config };
 }
 
+export function _resetExtensionContextForTesting() {
+  extensionContextInvalidated = false;
+}
+
 if (globalThis.chrome?.runtime?.id && globalThis.document?.body) {
   initMessageCollector(globalThis.document).catch((error) => {
-    console.error('[translate-for-slack] Không thể khởi tạo bộ thu thập tin nhắn:', error);
+    if (!isExtensionContextInvalidated(error)) {
+      console.error('[translate-for-slack] Không thể khởi tạo bộ thu thập tin nhắn:', error);
+    }
   });
 }

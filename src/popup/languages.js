@@ -200,6 +200,12 @@ export const LANGUAGE_OPTIONS = Object.freeze(
   LANGUAGE_ROWS.map(([code, name]) => Object.freeze({ code, name }))
 );
 
+const NATIVE_LANGUAGE_LABELS = Object.freeze({
+  'zh-CN': '简体中文',
+  'zh-TW': '繁體中文',
+  'mni-Mtei': 'ꯃꯩꯇꯩꯂꯣꯟ'
+});
+
 export function normalizeLanguageSearch(value) {
   return String(value || '')
     .normalize('NFD')
@@ -209,25 +215,36 @@ export function normalizeLanguageSearch(value) {
 }
 
 export function createLanguageChoices(locale = 'vi') {
-  let displayNames = null;
-  try {
-    displayNames = new Intl.DisplayNames([locale], { type: 'language' });
-  } catch {
-    // English names remain available when localized names are unsupported.
-  }
   const collator = new Intl.Collator(locale, { sensitivity: 'base' });
+  let searchDisplayNames = null;
+  try {
+    searchDisplayNames = new Intl.DisplayNames([locale], { type: 'language', fallback: 'none' });
+  } catch {
+    // Search remains available through native and catalog names.
+  }
   return LANGUAGE_OPTIONS.map((language) => {
-    let label = '';
+    let label = NATIVE_LANGUAGE_LABELS[language.code] || '';
+    if (!label) {
+      try {
+        label = new Intl.DisplayNames([language.code], {
+          type: 'language',
+          fallback: 'none'
+        }).of(language.code) || '';
+      } catch {
+        // The catalog name remains available when a language tag is unsupported.
+      }
+    }
+    if (!label) label = language.name;
+    let localizedSearchName = '';
     try {
-      label = displayNames?.of(language.code) || '';
+      localizedSearchName = searchDisplayNames?.of(language.code) || '';
     } catch {
       // Some runtimes do not recognize every recent BCP-47 language tag.
     }
-    if (!label || label.toLocaleLowerCase() === language.code.toLocaleLowerCase()) label = language.name;
     return {
       ...language,
       label,
-      searchText: normalizeLanguageSearch(`${label} ${language.name}`)
+      searchText: normalizeLanguageSearch(`${label} ${language.name} ${localizedSearchName}`)
     };
   }).sort((left, right) => collator.compare(left.label, right.label));
 }

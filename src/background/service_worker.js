@@ -1,6 +1,6 @@
 import { getConfig } from '../common/storage.js';
 import { getGeminiModel } from '../common/gemini_models.js';
-import { reserveApiKey } from '../common/api_key_usage.js';
+import { API_KEY_RPD_EXHAUSTED_CODE, markApiKeyRpdExhausted, reserveApiKey } from '../common/api_key_usage.js';
 import { checkForUpdates, initializeUpdateChecks, UPDATE_ALARM_NAME } from './update_checker.js';
 
 const TRANSLATE_MESSAGE_TYPE = 'tfs:translate-all-with-gemini';
@@ -13,28 +13,23 @@ function responseText(payload) {
     .trim();
 }
 
-async function readErrorMessage(response) {
+async function readGeminiError(response) {
+  let payload = null;
   try {
-    const payload = await response.json();
-    return payload?.error?.message || `Gemini trả về HTTP ${response.status}.`;
+    payload = await response.json();
   } catch {
-    return `Gemini trả về HTTP ${response.status}.`;
+    // The HTTP status is still available when Gemini returns a non-JSON body.
   }
+  const message = payload?.error?.message || 'Không có chi tiết lỗi.';
+  const error = new Error(`Gemini HTTP ${response.status}: ${message}`);
+  const quotaDetails = `${message} ${JSON.stringify(payload?.error?.details || [])}`;
+  if (response.status === 429 && /per[\s_-]?day|daily|\brpd\b/i.test(quotaDetails)) {
+    error.code = API_KEY_RPD_EXHAUSTED_CODE;
+  }
+  return error;
 }
 
-export async function requestGeminiTranslation(prompt, inputConfig = {}) {
-  const config = { ...(await getConfig()), ...inputConfig };
-  const keys = inputConfig.geminiApiKey
-    ? [String(inputConfig.geminiApiKey).trim()]
-    : config.geminiApiKeys;
-  const model = String(config.geminiModel || '').trim();
-  if (!keys?.length) throw new Error('Chưa có khóa API Gemini. Hãy thêm khóa trong popup.');
-  if (!model) throw new Error('Chưa cấu hình model Gemini trong popup.');
-  if (!getGeminiModel(model)) throw new Error('Model Gemini không được hỗ trợ. Hãy chọn model trong popup.');
-  if (!prompt) throw new Error('Không có nội dung để gửi đến Gemini.');
-
-  const apiKey = await reserveApiKey(keys, model);
-
+async function requestWithApiKey(prompt, model, apiKey) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -53,7 +48,7 @@ export async function requestGeminiTranslation(prompt, inputConfig = {}) {
       }),
       signal: controller.signal
     });
-    if (!response.ok) throw new Error(await readErrorMessage(response));
+    if (!response.ok) throw await readGeminiError(response);
     const payload = await response.json();
     const text = responseText(payload);
     if (!text) {
@@ -69,6 +64,34 @@ export async function requestGeminiTranslation(prompt, inputConfig = {}) {
   }
 }
 
+export async function requestGeminiTranslation(prompt, inputConfig = {}) {
+  const config = { ...(await getConfig()), ...inputConfig };
+  const keys = inputConfig.geminiApiKey
+    ? [String(inputConfig.geminiApiKey).trim()]
+    : config.geminiApiKeys;
+  const model = String(config.geminiModel || '').trim();
+  if (!keys?.length) throw new Error('Chưa có khóa API Gemini. Hãy thêm khóa trong popup.');
+  if (!model) throw new Error('Chưa cấu hình model Gemini trong popup.');
+  const modelEntry = getGeminiModel(model);
+  if (!modelEntry) throw new Error('Model Gemini không được hỗ trợ. Hãy chọn model trong popup.');
+  if (!prompt) throw new Error('Không có nội dung để gửi đến Gemini.');
+
+  const remainingKeys = [...keys];
+  while (remainingKeys.length > 0) {
+    const apiKey = await reserveApiKey(remainingKeys, model);
+    remainingKeys.splice(remainingKeys.indexOf(apiKey), 1);
+    try {
+      return await requestWithApiKey(prompt, model, apiKey);
+    } catch (error) {
+      if (error?.code !== API_KEY_RPD_EXHAUSTED_CODE) throw error;
+      await markApiKeyRpdExhausted(apiKey, model);
+    }
+  }
+  const error = new Error(`Đã dùng hết RPD của tất cả khóa API cho ${modelEntry.label} hôm nay.`);
+  error.code = API_KEY_RPD_EXHAUSTED_CODE;
+  throw error;
+}
+
 if (globalThis.chrome?.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'tfs:check-for-updates') {
@@ -80,7 +103,11 @@ if (globalThis.chrome?.runtime?.onMessage) {
     if (message?.type !== TRANSLATE_MESSAGE_TYPE) return false;
     requestGeminiTranslation(String(message.prompt || ''))
       .then((text) => sendResponse({ success: true, text }))
-      .catch((error) => sendResponse({ success: false, error: error?.message || 'Không thể gọi Gemini.' }));
+      .catch((error) => sendResponse({
+        success: false,
+        error: error?.message || 'Không thể gọi Gemini.',
+        ...(error?.code ? { code: error.code } : {})
+      }));
     return true;
   });
 }

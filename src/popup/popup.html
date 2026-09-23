@@ -8,27 +8,22 @@
   </head>
   <body>
     <main class="popup">
-      <header>
+      <header class="popup-header">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z"/><path d="M8 9h8M8 12h5"/></svg>
-        <div>
-          <h1>Dịch tin nhắn Slack</h1>
-          <p>Lưu lịch sử và dịch đồng bộ bằng Gemini.</p>
+        <div class="header-content">
+          <div class="header-row">
+            <h1>Dịch tin nhắn Slack</h1>
+            <p id="updateStatus" class="update-status" role="status" aria-live="polite">v…</p>
+            <button id="checkForUpdates" type="button" class="text-button">Kiểm tra cập nhật</button>
+          </div>
+          <div id="updateNotice" class="update-notice" hidden>
+            <strong>Đã có bản cập nhật</strong>
+            <p id="updateVersion"></p>
+            <p>Tải bản mới, thay tệp trong thư mục tiện ích, nhấn tải lại tiện ích rồi tải lại trang Slack đang mở.</p>
+            <a href="https://github.com/SonNX24042005/translate-for-slack#c%E1%BA%ADp-nh%E1%BA%ADt-ti%E1%BB%87n-%C3%ADch" target="_blank" rel="noreferrer">Xem cách cập nhật →</a>
+          </div>
         </div>
       </header>
-
-      <section class="update-section" aria-labelledby="update-heading">
-        <div class="update-heading-row">
-          <h2 id="update-heading">Phiên bản</h2>
-          <button id="checkForUpdates" type="button" class="text-button">Kiểm tra cập nhật</button>
-        </div>
-        <p id="updateStatus" class="update-status" role="status" aria-live="polite">Đang kiểm tra phiên bản…</p>
-        <div id="updateNotice" class="update-notice" hidden>
-          <strong>Đã có bản cập nhật</strong>
-          <p id="updateVersion"></p>
-          <p>Tải bản mới, thay tệp trong thư mục tiện ích rồi nhấn tải lại trên trang quản lý tiện ích.</p>
-          <a href="https://github.com/SonNX24042005/translate-for-slack#c%E1%BA%ADp-nh%E1%BA%ADt-ti%E1%BB%87n-%C3%ADch" target="_blank" rel="noreferrer">Xem cách cập nhật →</a>
-        </div>
-      </section>
 
       <section aria-labelledby="gemini-heading">
         <h2 id="gemini-heading">Cấu hình Gemini</h2>
@@ -65,6 +60,7 @@
                   aria-controls="targetLanguageOptions"
                   autocomplete="off"
                   placeholder="Tìm ngôn ngữ"
+                  readonly
                 />
                 <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg>
               </div>
@@ -76,29 +72,34 @@
       </section>
 
       <section aria-labelledby="storage-heading">
-        <h2 id="storage-heading">Kho tin nhắn</h2>
-        <label class="toggle-row" for="storeOriginalMessages">
-          <span>
-            <strong>Lưu tin nhắn đang hiển thị</strong>
-            <small>Tự lưu khi mở channel, DM, thread hoặc cuộn trang.</small>
-          </span>
-          <input id="storeOriginalMessages" type="checkbox" checked />
-        </label>
-
-        <div class="limits">
-          <label>
-            Số tin tối đa mỗi hội thoại
-            <input id="messageStoreMaxPerConversation" type="number" min="10" max="10000" step="10" value="1000" />
-          </label>
-          <label>
-            Tổng dung lượng tối đa (MB)
-            <input id="messageStoreMaxMegabytes" type="number" min="1" max="1000" step="1" value="50" />
-          </label>
+        <div class="storage-heading-row">
+          <h2 id="storage-heading">Kho tin nhắn</h2>
+          <button id="toggleStorageDetails" type="button" class="text-button" aria-expanded="false" aria-controls="storageDetails">Xem chi tiết</button>
         </div>
+        <div id="storageDetails" class="storage-details" hidden>
+          <label class="toggle-row" for="storeOriginalMessages">
+            <span>
+              <strong>Lưu tin nhắn đang hiển thị</strong>
+              <small>Tự lưu khi mở channel, DM, thread hoặc cuộn trang.</small>
+            </span>
+            <input id="storeOriginalMessages" type="checkbox" checked />
+          </label>
 
-        <div class="usage-row">
-          <span id="messageStorageUsage" aria-live="polite">Đang đọc kho dữ liệu…</span>
-          <button id="clearMessageStorage" type="button" class="secondary">Xóa kho tin nhắn</button>
+          <div class="limits">
+            <label>
+              Số tin tối đa mỗi hội thoại
+              <input id="messageStoreMaxPerConversation" type="number" min="10" max="10000" step="10" value="1000" />
+            </label>
+            <label>
+              Tổng dung lượng tối đa (MB)
+              <input id="messageStoreMaxMegabytes" type="number" min="1" max="1000" step="1" value="50" />
+            </label>
+          </div>
+
+          <div class="usage-row">
+            <span id="messageStorageUsage" aria-live="polite">Đang đọc kho dữ liệu…</span>
+            <button id="clearMessageStorage" type="button" class="secondary">Xóa kho tin nhắn</button>
+          </div>
         </div>
       </section>
 

@@ -302,9 +302,9 @@ export async function generateChannelContext(messages = [], options = {}) {
         return parseChannelContextResponse(response);
       } catch (error) {
         lastError = error;
-        if (attempt >= CONTEXT_MAX_ATTEMPTS) break;
+        if (attempt >= CONTEXT_MAX_ATTEMPTS || options.shouldRetry?.(error) === false) break;
         const delayMs = retryBaseDelayMs * (2 ** (attempt - 1));
-        options.onRetry?.({ mode, index, total, level, attempt, nextAttempt: attempt + 1, delayMs, error });
+        options.onRetry?.({ mode, index, total, level, attempt, nextAttempt: attempt + 1, maxAttempts: CONTEXT_MAX_ATTEMPTS, delayMs, error });
         if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }

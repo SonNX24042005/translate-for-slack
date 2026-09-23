@@ -7,6 +7,7 @@ import { resolveGeminiModel } from './gemini_models.js';
 let memoryStore = { ...DEFAULT_CONFIG };
 const changeListeners = new Set();
 const INTERNAL_STORAGE_KEY_PREFIX = '__tfs';
+const MODEL_CHOICE_AFTER_DEFAULT_CHANGE_KEY = '__tfsGeminiModelChoiceAfter35LiteDefault';
 
 function isInternalStorageKey(key) {
   return String(key || '').startsWith(INTERNAL_STORAGE_KEY_PREFIX);
@@ -105,6 +106,9 @@ export async function getConfig() {
         ...pickSupportedConfig(rootConfig),
         ...pickSupportedConfig(storedConfig)
       };
+      if (stored[MODEL_CHOICE_AFTER_DEFAULT_CHANGE_KEY] !== true) {
+        merged.geminiModel = DEFAULT_CONFIG.geminiModel;
+      }
 
       resolve(normalizeConfig(merged));
     });
@@ -147,7 +151,12 @@ export async function setConfig(partialConfig) {
     }
 
     return new Promise((resolve, reject) => {
-      chrome.storage.local.set(updated, () => {
+      chrome.storage.local.set({
+        ...updated,
+        ...(Object.prototype.hasOwnProperty.call(partialConfig, 'geminiModel')
+          ? { [MODEL_CHOICE_AFTER_DEFAULT_CHANGE_KEY]: true }
+          : {})
+      }, () => {
         if (chrome.runtime?.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
           return;

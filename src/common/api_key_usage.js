@@ -1,9 +1,10 @@
 import { getGeminiModel } from './gemini_models.js';
 
 export const API_KEY_USAGE_STORAGE_KEY = '__tfsGeminiRpdUsageV1';
+export const API_KEY_RPD_EXHAUSTED_CODE = 'API_KEY_RPD_EXHAUSTED';
 
 let reservationQueue = Promise.resolve();
-let memoryUsage = { day: '', counts: {} };
+let memoryUsage = { day: '', counts: {}, exhausted: {} };
 
 function enqueueReservation(task) {
   const next = reservationQueue.catch(() => {}).then(task);
@@ -30,8 +31,8 @@ async function readUsage(day = pacificDay()) {
     ? (await chrome.storage.local.get(API_KEY_USAGE_STORAGE_KEY))[API_KEY_USAGE_STORAGE_KEY]
     : memoryUsage;
   return stored?.day === day && stored.counts && typeof stored.counts === 'object'
-    ? { day, counts: stored.counts }
-    : { day, counts: {} };
+    ? { day, counts: stored.counts, exhausted: stored.exhausted && typeof stored.exhausted === 'object' ? stored.exhausted : {} }
+    : { day, counts: {}, exhausted: {} };
 }
 
 async function writeUsage(usage) {
@@ -44,10 +45,24 @@ async function writeUsage(usage) {
 
 export async function getApiKeyUsage(keys, day = pacificDay()) {
   const usage = await readUsage(day);
-  return Promise.all(keys.map(async (key) => ({
-    key,
-    counts: { ...(usage.counts[await keyId(key)] || {}) }
-  })));
+  return Promise.all(keys.map(async (key) => {
+    const id = await keyId(key);
+    return {
+      key,
+      counts: { ...(usage.counts[id] || {}) },
+      exhausted: { ...(usage.exhausted[id] || {}) }
+    };
+  }));
+}
+
+export function markApiKeyRpdExhausted(key, modelId, day = null) {
+  return enqueueReservation(async () => {
+    if (!getGeminiModel(modelId)) throw new Error('Model Gemini không được hỗ trợ.');
+    const usage = await readUsage(day || pacificDay());
+    const id = await keyId(key);
+    usage.exhausted[id] = { ...(usage.exhausted[id] || {}), [modelId]: true };
+    await writeUsage(usage);
+  });
 }
 
 export function reserveApiKey(keys, modelId, day = null) {
@@ -60,11 +75,13 @@ export function reserveApiKey(keys, modelId, day = null) {
       const id = await keyId(key);
       const counts = usage.counts[id] || {};
       const used = Number(counts[modelId]) || 0;
-      if (used >= model.rpd) continue;
+      if (used >= model.rpd || usage.exhausted[id]?.[modelId]) continue;
       usage.counts[id] = { ...counts, [modelId]: used + 1 };
       await writeUsage(usage);
       return key;
     }
-    throw new Error(`Đã dùng hết RPD cục bộ của tất cả khóa API cho ${model.label} hôm nay.`);
+    const error = new Error(`Đã dùng hết RPD của tất cả khóa API cho ${model.label} hôm nay.`);
+    error.code = API_KEY_RPD_EXHAUSTED_CODE;
+    throw error;
   });
 }

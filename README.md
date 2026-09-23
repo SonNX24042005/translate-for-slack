@@ -41,9 +41,9 @@ Extension hỗ trợ thu thập và dịch các cuộc trò chuyện trên Slack
 
 ### Cập nhật tiện ích
 
-Tiện ích kiểm tra phiên bản trên kho công khai mỗi 24 giờ. Khi có phiên bản mới, biểu tượng tiện ích hiện huy hiệu `1` và popup hiển thị số phiên bản cùng hướng dẫn cập nhật. Bạn cũng có thể nhấn **Kiểm tra cập nhật** trong popup.
+Tiện ích kiểm tra phiên bản trên kho công khai mỗi 24 giờ. Khi có phiên bản mới, biểu tượng tiện ích hiện huy hiệu `1` và popup hiển thị số phiên bản cùng hướng dẫn cập nhật. Bạn cũng có thể nhấn **Kiểm tra cập nhật** ở hàng tiêu đề của popup.
 
-Nếu đã cài bằng `git clone`, chạy `git pull --ff-only` trong thư mục tiện ích. Nếu cài từ tệp zip, tải lại mã nguồn từ [kho công khai](https://github.com/SonNX24042005/translate-for-slack), rồi thay nội dung thư mục tiện ích bằng bản mới. Cuối cùng, mở trang quản lý tiện ích (`chrome://extensions`, `edge://extensions` hoặc trang tương ứng của trình duyệt) và nhấn **Tải lại** trên tiện ích. Dữ liệu được lưu trong bộ nhớ trình duyệt sẽ không bị xóa khi tải lại.
+Nếu đã cài bằng `git clone`, chạy `git pull --ff-only` trong thư mục tiện ích. Nếu cài từ tệp zip, tải lại mã nguồn từ [kho công khai](https://github.com/SonNX24042005/translate-for-slack), rồi thay nội dung thư mục tiện ích bằng bản mới. Cuối cùng, mở trang quản lý tiện ích (`chrome://extensions`, `edge://extensions` hoặc trang tương ứng của trình duyệt), nhấn **Tải lại** trên tiện ích và tải lại các trang Slack đang mở. Dữ liệu được lưu trong bộ nhớ trình duyệt sẽ không bị xóa khi tải lại.
 
 Khi phát hành bản mới, hãy tăng `version` trong `manifest.json`, `package.json` và `package-lock.json`; trình kiểm tra dùng giá trị trong manifest để nhận biết bản cập nhật.
 
@@ -62,11 +62,11 @@ Khi phát hành bản mới, hãy tăng `version` trong `manifest.json`, `packag
 1. Nhấn vào biểu tượng extension trên thanh công cụ của trình duyệt để mở popup.
 2. Dán khóa API vừa sao chép vào ô **Khóa API Gemini** rồi nhấn **Thêm khóa**. Ô nhập sẽ trống để bạn thêm khóa khác (bạn cũng có thể bấm vào dòng *Lấy khóa API tại Google AI Studio* ngay trên giao diện popup để mở trang tạo khóa):
    ![Dán khóa API vào popup extension](docs/images/api_key_step4.png)
-3. Chọn một trong sáu model Gemini có sẵn (mặc định: `gemini-3.8-flash`) và thiết lập ngôn ngữ đích cần dịch. Hạn mức RPD theo ảnh được lưu cùng danh sách model trong mã nguồn; hạn mức thực tế có thể thay đổi theo dự án và được xem trong Google AI Studio.
+3. Chọn một trong sáu model Gemini có sẵn (mặc định: `gemini-3.5-flash-lite`) và thiết lập ngôn ngữ đích cần dịch. Danh sách hiển thị tên bản địa của ngôn ngữ và vẫn tìm được bằng tên tiếng Anh hoặc tiếng Việt. Khi cập nhật lên bản này, lựa chọn model cũ được chuyển một lần sang model mặc định; sau đó bạn có thể chọn lại model khác. Hạn mức RPD theo ảnh được lưu cùng danh sách model trong mã nguồn; hạn mức thực tế có thể thay đổi theo dự án và được xem trong Google AI Studio.
 
 ### Nhiều khóa API và bộ đếm RPD
 
-Popup cho phép thêm nhiều khóa API, xóa khóa không còn dùng và xem lượt gửi/giới hạn RPD của từng model theo từng khóa qua **Xem chi tiết khóa API**. Khóa chỉ được hiển thị dưới dạng đã che. Mỗi lần gửi yêu cầu sẽ tăng bộ đếm cục bộ, kể cả khi yêu cầu thất bại. Khi một khóa đạt mức RPD của model, tiện ích tự dùng khóa tiếp theo; nếu tất cả đều đạt mức thì dừng và báo lỗi. Bộ đếm đặt lại theo nửa đêm giờ Thái Bình Dương.
+Popup cho phép thêm nhiều khóa API, xóa khóa không còn dùng và xem lượt gửi/giới hạn RPD qua **Xem chi tiết khóa API**. Chọn một khóa trong danh sách để xem RPD của các model thuộc khóa đó. Khóa chỉ được hiển thị dưới dạng đã che. Mỗi lần gửi yêu cầu sẽ tăng bộ đếm cục bộ, kể cả khi yêu cầu thất bại. Khi bộ đếm hoặc Gemini báo một khóa hết RPD của model, tiện ích thử khóa tiếp theo ngay; chỉ báo hết lượt khi mọi khóa đều hết. Trạng thái Gemini báo hết lượt được hiển thị riêng để số lượt đã gửi vẫn chính xác. Bộ đếm đặt lại theo nửa đêm giờ Thái Bình Dương. [Hạn mức Gemini tính theo dự án](https://ai.google.dev/gemini-api/docs/rate-limits), nên các khóa cùng dự án có thể hết lượt cùng lúc.
 
 [Gemini áp hạn mức thực tế theo dự án, không theo từng khóa API](https://ai.google.dev/gemini-api/docs/rate-limits). Vì vậy, nhiều khóa thuộc cùng một dự án vẫn chia sẻ hạn mức của Google; bộ đếm trong tiện ích chỉ phản ánh các yêu cầu đã gửi từ trình duyệt này.
 

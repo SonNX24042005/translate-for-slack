@@ -1,4 +1,4 @@
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
 
 export const GEMINI_MODELS = Object.freeze([
   { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite', rpd: 500 },

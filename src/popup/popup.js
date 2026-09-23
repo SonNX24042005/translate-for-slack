@@ -33,6 +33,8 @@ export async function initPopup(doc = document) {
   const totalMegabytes = doc.getElementById('messageStoreMaxMegabytes');
   const usage = doc.getElementById('messageStorageUsage');
   const clearButton = doc.getElementById('clearMessageStorage');
+  const toggleStorageDetailsButton = doc.getElementById('toggleStorageDetails');
+  const storageDetails = doc.getElementById('storageDetails');
   const resetButton = doc.getElementById('resetButton');
   const feedback = doc.getElementById('saveFeedback');
   const status = doc.getElementById('statusAlert');
@@ -45,8 +47,11 @@ export async function initPopup(doc = document) {
   let filteredLanguages = languageChoices;
   let activeLanguageIndex = -1;
   let loading = true;
+  let selectedApiKey = '';
+  let apiKeyRefreshId = 0;
 
   async function refreshApiKeys() {
+    const refreshId = ++apiKeyRefreshId;
     const keys = (await getConfig()).geminiApiKeys;
     if (apiKeyCount) apiKeyCount.textContent = keys.length ? `Đã lưu ${keys.length} khóa API` : 'Chưa có khóa API';
     if (showApiKeysButton) showApiKeysButton.disabled = keys.length === 0;
@@ -55,50 +60,75 @@ export async function initPopup(doc = document) {
       showApiKeysButton.setAttribute('aria-expanded', 'false');
       showApiKeysButton.textContent = 'Xem chi tiết khóa API';
     }
+    if (keys.length === 0) selectedApiKey = '';
     if (!apiKeyDetails || apiKeyDetails.hidden) return;
-    const usage = await getApiKeyUsage(keys);
+    const selectedIndex = Math.max(0, keys.indexOf(selectedApiKey));
+    selectedApiKey = keys[selectedIndex];
+    const key = selectedApiKey;
+    const [usage] = await getApiKeyUsage([key]);
+    if (refreshId !== apiKeyRefreshId || apiKeyDetails.hidden) return;
+    const selectorField = doc.createElement('label');
+    selectorField.className = 'api-key-select-field';
+    selectorField.textContent = 'Chọn khóa API';
+    const selector = doc.createElement('select');
+    selector.id = 'apiKeySelect';
+    keys.forEach((key, index) => {
+      const option = doc.createElement('option');
+      option.value = String(index);
+      option.textContent = `Khóa ${index + 1} · ••••${key.slice(-4)}`;
+      selector.append(option);
+    });
+    selector.value = String(selectedIndex);
+    selector.addEventListener('change', () => {
+      selectedApiKey = keys[Number(selector.value)] || keys[0];
+      void refreshApiKeys();
+    });
+    selectorField.append(selector);
     const note = doc.createElement('p');
     note.className = 'api-key-note';
     note.textContent = `Lượt gửi ngày ${pacificDay()} theo giờ Thái Bình Dương trên trình duyệt này. Gemini áp hạn mức thực tế theo dự án.`;
-    const cards = usage.map(({ key, counts }, index) => {
-      const card = doc.createElement('div');
-      card.className = 'api-key-card';
-      const cardHeader = doc.createElement('div');
-      cardHeader.className = 'api-key-card-header';
-      const header = doc.createElement('strong');
-      header.textContent = `Khóa ${index + 1} · ••••${key.slice(-4)}`;
-      const remove = doc.createElement('button');
-      remove.type = 'button';
-      remove.className = 'api-key-remove';
-      remove.textContent = 'Xóa';
-      remove.setAttribute('aria-label', `Xóa khóa API ${index + 1}`);
-      remove.addEventListener('click', async () => {
-        remove.disabled = true;
-        try {
-          const current = (await getConfig()).geminiApiKeys;
-          await setConfig({ geminiApiKeys: current.filter((value) => value !== key), geminiApiKey: '' });
-          await refreshApiKeys();
-          showFeedback('✓ Đã xóa khóa API');
-        } catch {
-          remove.disabled = false;
-          showStatus('Không thể xóa khóa API. Vui lòng thử lại.', 'error');
-        }
-      });
-      cardHeader.append(header, remove);
-      card.append(cardHeader);
-      for (const modelEntry of GEMINI_MODELS) {
-        const row = doc.createElement('div');
-        row.className = 'api-key-usage-row';
-        const label = doc.createElement('span');
-        label.textContent = modelEntry.label;
-        const count = doc.createElement('span');
-        count.textContent = `${counts[modelEntry.id] || 0}/${modelEntry.rpd} RPD`;
-        row.append(label, count);
-        card.append(row);
+    const card = doc.createElement('div');
+    card.className = 'api-key-card';
+    const cardHeader = doc.createElement('div');
+    cardHeader.className = 'api-key-card-header';
+    const header = doc.createElement('strong');
+    header.textContent = `Khóa ${selectedIndex + 1} · ••••${key.slice(-4)}`;
+    const remove = doc.createElement('button');
+    remove.type = 'button';
+    remove.className = 'api-key-remove';
+    remove.textContent = 'Xóa';
+    remove.setAttribute('aria-label', `Xóa khóa API ${selectedIndex + 1}`);
+    remove.addEventListener('click', async () => {
+      remove.disabled = true;
+      try {
+        const current = (await getConfig()).geminiApiKeys;
+        await setConfig({ geminiApiKeys: current.filter((value) => value !== key), geminiApiKey: '' });
+        selectedApiKey = '';
+        await refreshApiKeys();
+        showFeedback('✓ Đã xóa khóa API');
+      } catch {
+        remove.disabled = false;
+        showStatus('Không thể xóa khóa API. Vui lòng thử lại.', 'error');
       }
-      return card;
     });
-    apiKeyDetails.replaceChildren(note, ...cards);
+    cardHeader.append(header, remove);
+    card.append(cardHeader);
+    for (const modelEntry of GEMINI_MODELS) {
+      const row = doc.createElement('div');
+      row.className = 'api-key-usage-row';
+      const label = doc.createElement('span');
+      label.textContent = modelEntry.label;
+      const count = doc.createElement('span');
+      const exhausted = usage.exhausted[modelEntry.id] === true;
+      count.textContent = `${usage.counts[modelEntry.id] || 0}/${modelEntry.rpd} RPD${exhausted ? ' · Hết lượt' : ''}`;
+      if (exhausted) {
+        count.dataset.exhausted = 'true';
+        count.title = 'Gemini báo khóa này đã hết RPD của model';
+      }
+      row.append(label, count);
+      card.append(row);
+    }
+    apiKeyDetails.replaceChildren(selectorField, note, card);
   }
 
   if (model) {
@@ -113,21 +143,22 @@ export async function initPopup(doc = document) {
   async function refreshUpdateStatus(force = false) {
     if (!updateStatus || !chrome.runtime?.getManifest || !chrome.runtime?.sendMessage) return;
     const installedVersion = chrome.runtime.getManifest().version;
-    updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion} · Đang kiểm tra…`;
+    updateStatus.textContent = `v${installedVersion} · Đang kiểm tra…`;
     if (checkForUpdatesButton) checkForUpdatesButton.disabled = true;
     try {
       const state = await chrome.runtime.sendMessage({ type: 'tfs:check-for-updates', force });
       if (!state || state.error) {
-        updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion} · ${state?.error || 'Không thể kiểm tra bản mới.'}`;
+        updateStatus.textContent = `v${installedVersion} · ${state?.error || 'Không thể kiểm tra bản mới.'}`;
       } else {
-        updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion}`;
+        updateStatus.textContent = `v${installedVersion}`;
       }
       const available = state?.updateAvailable === true;
       if (updateNotice) updateNotice.hidden = !available;
       if (available && updateVersion) updateVersion.textContent = `Bản mới: ${state.latestVersion}`;
     } catch {
-      updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion} · Không thể kiểm tra bản mới.`;
+      updateStatus.textContent = `v${installedVersion} · Không thể kiểm tra bản mới.`;
     } finally {
+      updateStatus.title = updateStatus.textContent;
       if (checkForUpdatesButton) checkForUpdatesButton.disabled = false;
     }
   }
@@ -192,7 +223,18 @@ export async function initPopup(doc = document) {
 
   function openLanguageOptions() {
     if (!languagePicker || !languageOptions || !languageSearch) return;
+    const rect = languagePicker.getBoundingClientRect();
+    const viewportHeight = doc.defaultView?.innerHeight || 0;
+    if (rect.height > 0 && viewportHeight > 0) {
+      const availableAbove = rect.top;
+      const availableBelow = viewportHeight - rect.bottom;
+      const placeAbove = availableBelow < 224 && availableAbove > availableBelow;
+      languagePicker.dataset.placement = placeAbove ? 'above' : 'below';
+      const availableSpace = placeAbove ? availableAbove : availableBelow;
+      languageOptions.style.maxHeight = `${Math.min(220, Math.max(48, availableSpace - 8))}px`;
+    }
     renderLanguageOptions(languageSearch.value === selectedLanguageLabel() ? '' : languageSearch.value);
+    languageSearch.readOnly = false;
     languageOptions.hidden = false;
     languagePicker.dataset.open = 'true';
     languageSearch.setAttribute('aria-expanded', 'true');
@@ -204,6 +246,7 @@ export async function initPopup(doc = document) {
     languagePicker.dataset.open = 'false';
     languageSearch.setAttribute('aria-expanded', 'false');
     languageSearch.removeAttribute('aria-activedescendant');
+    languageSearch.readOnly = true;
     activeLanguageIndex = -1;
     if (restore) languageSearch.value = selectedLanguageLabel();
   }
@@ -270,7 +313,10 @@ export async function initPopup(doc = document) {
   if (apiKey) apiKey.value = '';
   if (model) model.value = resolveGeminiModel(config.geminiModel).id;
   selectedLanguage = resolveLanguageOption(config);
-  if (languageSearch) languageSearch.value = selectedLanguageLabel();
+  if (languageSearch) {
+    languageSearch.value = selectedLanguageLabel();
+    languageSearch.readOnly = true;
+  }
   renderLanguageOptions();
   if (perConversation) perConversation.value = String(config.messageStoreMaxPerConversation || 1000);
   if (totalMegabytes) totalMegabytes.value = String(config.messageStoreMaxMegabytes || 50);
@@ -320,6 +366,12 @@ export async function initPopup(doc = document) {
     showApiKeysButton.textContent = apiKeyDetails.hidden ? 'Xem chi tiết khóa API' : 'Ẩn chi tiết khóa API';
     void refreshApiKeys();
   });
+  toggleStorageDetailsButton?.addEventListener('click', () => {
+    if (!storageDetails) return;
+    storageDetails.hidden = !storageDetails.hidden;
+    toggleStorageDetailsButton.setAttribute('aria-expanded', String(!storageDetails.hidden));
+    toggleStorageDetailsButton.textContent = storageDetails.hidden ? 'Xem chi tiết' : 'Ẩn chi tiết';
+  });
   chrome.storage?.onChanged?.addListener((changes, areaName) => {
     if (areaName === 'local' && changes?.[API_KEY_USAGE_STORAGE_KEY] && !apiKeyDetails?.hidden) {
       void refreshApiKeys();
@@ -327,8 +379,14 @@ export async function initPopup(doc = document) {
   });
   model?.addEventListener('change', () => save());
   languageSearch?.addEventListener('focus', () => {
-    languageSearch.select();
     openLanguageOptions();
+    languageSearch.select();
+  });
+  languageSearch?.addEventListener('click', () => {
+    if (languageOptions?.hidden) {
+      openLanguageOptions();
+      languageSearch.select();
+    }
   });
   languageSearch?.addEventListener('input', () => {
     openLanguageOptions();
@@ -355,7 +413,7 @@ export async function initPopup(doc = document) {
     }
   });
   doc.addEventListener('click', (event) => {
-    if (languagePicker && !languagePicker.contains(event.target)) closeLanguageOptions();
+    if (languagePicker && !languagePicker.contains(event.target) && !languageOptions?.hidden) closeLanguageOptions();
   });
   perConversation?.addEventListener('change', () => save({ prune: true }));
   totalMegabytes?.addEventListener('change', () => save({ prune: true }));
