@@ -16,6 +16,20 @@
         </div>
       </header>
 
+      <section class="update-section" aria-labelledby="update-heading">
+        <div class="update-heading-row">
+          <h2 id="update-heading">Phiên bản</h2>
+          <button id="checkForUpdates" type="button" class="text-button">Kiểm tra cập nhật</button>
+        </div>
+        <p id="updateStatus" class="update-status" role="status" aria-live="polite">Đang kiểm tra phiên bản…</p>
+        <div id="updateNotice" class="update-notice" hidden>
+          <strong>Đã có bản cập nhật</strong>
+          <p id="updateVersion"></p>
+          <p>Tải bản mới, thay tệp trong thư mục tiện ích rồi nhấn tải lại trên trang quản lý tiện ích.</p>
+          <a href="https://github.com/SonNX24042005/translate-for-slack#c%E1%BA%ADp-nh%E1%BA%ADt-ti%E1%BB%87n-%C3%ADch" target="_blank" rel="noreferrer">Xem cách cập nhật →</a>
+        </div>
+      </section>
+
       <section aria-labelledby="gemini-heading">
         <h2 id="gemini-heading">Cấu hình Gemini</h2>
         <div class="form-grid">

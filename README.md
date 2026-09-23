@@ -39,6 +39,14 @@ Extension hỗ trợ thu thập và dịch các cuộc trò chuyện trên Slack
 3. Bật chế độ dành cho nhà phát triển (Developer mode).
 4. Nhấn **Tải tiện ích đã giải nén** (Load unpacked) và chọn thư mục chứa mã nguồn extension.
 
+### Cập nhật tiện ích
+
+Tiện ích kiểm tra phiên bản trên kho công khai mỗi 24 giờ. Khi có phiên bản mới, biểu tượng tiện ích hiện huy hiệu `1` và popup hiển thị số phiên bản cùng hướng dẫn cập nhật. Bạn cũng có thể nhấn **Kiểm tra cập nhật** trong popup.
+
+Nếu đã cài bằng `git clone`, chạy `git pull --ff-only` trong thư mục tiện ích. Nếu cài từ tệp zip, tải lại mã nguồn từ [kho công khai](https://github.com/SonNX24042005/translate-for-slack), rồi thay nội dung thư mục tiện ích bằng bản mới. Cuối cùng, mở trang quản lý tiện ích (`chrome://extensions`, `edge://extensions` hoặc trang tương ứng của trình duyệt) và nhấn **Tải lại** trên tiện ích. Dữ liệu được lưu trong bộ nhớ trình duyệt sẽ không bị xóa khi tải lại.
+
+Khi phát hành bản mới, hãy tăng `version` trong `manifest.json`, `package.json` và `package-lock.json`; trình kiểm tra dùng giá trị trong manifest để nhận biết bản cập nhật.
+
 ### 2. Thiết lập ban đầu
 
 **Bước 1: Lấy khóa API Gemini miễn phí từ Google AI Studio**

@@ -1,4 +1,5 @@
 import { getConfig } from '../common/storage.js';
+import { checkForUpdates, initializeUpdateChecks, UPDATE_ALARM_NAME } from './update_checker.js';
 
 const TRANSLATE_MESSAGE_TYPE = 'tfs:translate-all-with-gemini';
 const REQUEST_TIMEOUT_MS = 180000;
@@ -63,10 +64,25 @@ export async function requestGeminiTranslation(prompt, inputConfig = {}) {
 
 if (globalThis.chrome?.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message?.type === 'tfs:check-for-updates') {
+      checkForUpdates({ force: message.force === true })
+        .then(sendResponse)
+        .catch(() => sendResponse({ error: 'Không thể kiểm tra phiên bản mới.' }));
+      return true;
+    }
     if (message?.type !== TRANSLATE_MESSAGE_TYPE) return false;
     requestGeminiTranslation(String(message.prompt || ''))
       .then((text) => sendResponse({ success: true, text }))
       .catch((error) => sendResponse({ success: false, error: error?.message || 'Không thể gọi Gemini.' }));
     return true;
   });
+}
+
+if (globalThis.chrome?.alarms?.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === UPDATE_ALARM_NAME) void checkForUpdates();
+  });
+  chrome.runtime.onStartup?.addListener(() => { void initializeUpdateChecks(); });
+  chrome.runtime.onInstalled?.addListener(() => { void initializeUpdateChecks(); });
+  void initializeUpdateChecks();
 }

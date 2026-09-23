@@ -30,11 +30,37 @@ export async function initPopup(doc = document) {
   const resetButton = doc.getElementById('resetButton');
   const feedback = doc.getElementById('saveFeedback');
   const status = doc.getElementById('statusAlert');
+  const updateStatus = doc.getElementById('updateStatus');
+  const updateNotice = doc.getElementById('updateNotice');
+  const updateVersion = doc.getElementById('updateVersion');
+  const checkForUpdatesButton = doc.getElementById('checkForUpdates');
   const languageChoices = createLanguageChoices('vi');
   let selectedLanguage = resolveLanguageOption();
   let filteredLanguages = languageChoices;
   let activeLanguageIndex = -1;
   let loading = true;
+
+  async function refreshUpdateStatus(force = false) {
+    if (!updateStatus || !chrome.runtime?.getManifest || !chrome.runtime?.sendMessage) return;
+    const installedVersion = chrome.runtime.getManifest().version;
+    updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion} · Đang kiểm tra…`;
+    if (checkForUpdatesButton) checkForUpdatesButton.disabled = true;
+    try {
+      const state = await chrome.runtime.sendMessage({ type: 'tfs:check-for-updates', force });
+      if (!state || state.error) {
+        updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion} · ${state?.error || 'Không thể kiểm tra bản mới.'}`;
+      } else {
+        updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion}`;
+      }
+      const available = state?.updateAvailable === true;
+      if (updateNotice) updateNotice.hidden = !available;
+      if (available && updateVersion) updateVersion.textContent = `Bản mới: ${state.latestVersion}`;
+    } catch {
+      updateStatus.textContent = `Phiên bản hiện tại: ${installedVersion} · Không thể kiểm tra bản mới.`;
+    } finally {
+      if (checkForUpdatesButton) checkForUpdatesButton.disabled = false;
+    }
+  }
 
   function selectedLanguageLabel() {
     return languageChoices.find((language) => language.code === selectedLanguage.code)?.label
@@ -182,6 +208,8 @@ export async function initPopup(doc = document) {
   updateDisabledState();
   await refreshUsage();
   loading = false;
+  void refreshUpdateStatus();
+  checkForUpdatesButton?.addEventListener('click', () => refreshUpdateStatus(true));
 
   enabled?.addEventListener('change', () => save());
   apiKey?.addEventListener('change', () => save());
