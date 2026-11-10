@@ -13,6 +13,19 @@ function responseText(payload) {
     .trim();
 }
 
+function parseDurationMs(value) {
+  const match = String(value ?? '').trim().match(/^(\d+(?:\.\d+)?)s?$/i);
+  return match ? Math.round(Number(match[1]) * 1000) : 0;
+}
+
+// Gemini suggests a wait through RetryInfo.retryDelay ("12s") or the Retry-After header (seconds).
+function retryAfterMs(response, payload) {
+  const retryInfo = (payload?.error?.details || []).find((detail) => {
+    return String(detail?.['@type'] || '').endsWith('google.rpc.RetryInfo');
+  });
+  return parseDurationMs(retryInfo?.retryDelay) || parseDurationMs(response.headers?.get?.('retry-after'));
+}
+
 async function readGeminiError(response) {
   let payload = null;
   try {
@@ -22,6 +35,9 @@ async function readGeminiError(response) {
   }
   const message = payload?.error?.message || 'Không có chi tiết lỗi.';
   const error = new Error(`Gemini HTTP ${response.status}: ${message}`);
+  error.status = response.status;
+  const suggestedDelay = retryAfterMs(response, payload);
+  if (suggestedDelay > 0) error.retryAfterMs = suggestedDelay;
   const quotaDetails = `${message} ${JSON.stringify(payload?.error?.details || [])}`;
   if (response.status === 429 && /per[\s_-]?day|daily|\brpd\b/i.test(quotaDetails)) {
     error.code = API_KEY_RPD_EXHAUSTED_CODE;
@@ -106,7 +122,9 @@ if (globalThis.chrome?.runtime?.onMessage) {
       .catch((error) => sendResponse({
         success: false,
         error: error?.message || 'Không thể gọi Gemini.',
-        ...(error?.code ? { code: error.code } : {})
+        ...(error?.code ? { code: error.code } : {}),
+        ...(error?.status ? { status: error.status } : {}),
+        ...(error?.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {})
       }));
     return true;
   });

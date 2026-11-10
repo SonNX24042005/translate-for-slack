@@ -71,14 +71,19 @@ export function reserveApiKey(keys, modelId, day = null) {
     if (!model) throw new Error('Model Gemini không được hỗ trợ.');
     if (!keys.length) throw new Error('Chưa có khóa API Gemini. Hãy thêm khóa trong popup.');
     const usage = await readUsage(day || pacificDay());
+    // Spread concurrent requests across keys (least used first) so each key's per-minute load stays low.
+    let selected = null;
     for (const key of keys) {
       const id = await keyId(key);
       const counts = usage.counts[id] || {};
       const used = Number(counts[modelId]) || 0;
       if (used >= model.rpd || usage.exhausted[id]?.[modelId]) continue;
-      usage.counts[id] = { ...counts, [modelId]: used + 1 };
+      if (!selected || used < selected.used) selected = { key, id, counts, used };
+    }
+    if (selected) {
+      usage.counts[selected.id] = { ...selected.counts, [modelId]: selected.used + 1 };
       await writeUsage(usage);
-      return key;
+      return selected.key;
     }
     const error = new Error(`Đã dùng hết RPD của tất cả khóa API cho ${model.label} hôm nay.`);
     error.code = API_KEY_RPD_EXHAUSTED_CODE;

@@ -18,8 +18,20 @@
   bottom: 158px;
 }
 
+.tfs-retry-failed-control {
+  bottom: 204px;
+}
+
+.tfs-retry-failed-control[hidden] {
+  display: none;
+}
+
 .tfs-controls-toggle {
   bottom: 204px;
+}
+
+body[data-tfs-has-failed-batches="true"] .tfs-controls-toggle {
+  bottom: 250px;
 }
 
 body[data-tfs-controls-collapsed="true"] .tfs-history-control:not(.tfs-controls-toggle) {
@@ -43,6 +55,11 @@ body[data-tfs-controls-collapsed="true"] .tfs-history-control:not(.tfs-controls-
 .tfs-translate-new-control .tfs-history-button {
   color: #007a5a;
   border-color: #007a5a;
+}
+
+.tfs-retry-failed-control .tfs-history-button {
+  color: #b5104a;
+  border-color: #b5104a;
 }
 
 .tfs-thread-history-control .tfs-history-button {

@@ -1,5 +1,8 @@
 // Channel-wide translation brief generation from plain Slack message text.
 
+import { retryDelayMs } from '../common/retry_policy.js';
+import { cleanSenderName } from './batch_prompt.js';
+
 export const CHANNEL_CONTEXT_SOURCE_CHUNK_CHARS = 24000;
 export const CHANNEL_CONTEXT_MAX_SERIALIZED_CHARS = 10000;
 
@@ -150,7 +153,7 @@ function messageRecords(messages, maximumChars) {
       ...(message?.messageTimestamp || message?.messageTime
         ? { time: String(message.messageTimestamp || message.messageTime) }
         : {}),
-      ...(message?.senderName ? { sender: cleanString(message.senderName, 200) } : {})
+      ...(cleanSenderName(message?.senderName) ? { sender: cleanSenderName(message.senderName) } : {})
     };
     const pieces = [];
     let offset = 0;
@@ -224,7 +227,9 @@ Quy tắc:
 2. Không dịch hoặc chép lại toàn bộ hội thoại. Chỉ giữ chủ đề, giọng điệu, vai trò, cách xưng hô, thuật ngữ, tên riêng, dữ kiện lặp lại và điểm dễ nhầm có ích cho việc dịch.
 3. Viết nội dung giải thích bằng ${targetName}. Trong bảng terms, giữ chính xác cụm từ nguồn ở source và cách dịch ổn định ở target.
 4. Không suy đoán. Bỏ qua thông tin không chắc chắn hoặc ghi ngắn gọn vào ambiguities.
-5. Giữ nguyên tên người, sản phẩm, dịch vụ, username, mention, channel và mã định danh trong proper_nouns.
+5. Giữ nguyên tên người, sản phẩm, dịch vụ, nhóm, lớp, tệp, username, mention, channel và mã định danh trong proper_nouns, chép đúng từng ký tự như nguồn (không phiên âm, không đổi hệ chữ).
+5a. Trong participants.role, ghi vai trò và cách người đó tự xưng, được người khác gọi nếu dữ liệu cho thấy (ví dụ một người tự xưng "cô" trong tin viết bằng ngôn ngữ đích). Không đoán giới tính từ tên.
+5b. Đưa vào terms cả những từ thông dụng lặp lại nhiều lần (ví dụ loại bài đăng, đơn vị nhóm, ký hiệu điểm danh) cùng một cách dịch duy nhất, để mọi lượt dịch dùng thống nhất.
 6. Context chỉ hỗ trợ dịch: không thêm dữ kiện context vào câu dịch nếu tin nhắn nguồn không chứa dữ kiện đó.
 7. Chỉ trả về đúng một JSON object, không Markdown, code block, lời mở đầu hay kết luận. Dùng đúng schema và không thêm khóa:
 
@@ -292,18 +297,40 @@ export async function generateChannelContext(messages = [], options = {}) {
     ? Number(options.retryBaseDelayMs)
     : CONTEXT_RETRY_BASE_DELAY_MS;
 
+  // Partial contexts are keyed by their exact prompt, so an unchanged chunk reuses the
+  // same extract/merge result instead of asking Gemini again.
+  const cachedPartials = options.cachedPartials && typeof options.cachedPartials === 'object'
+    ? options.cachedPartials
+    : {};
+  const usedPartials = {};
+  const concurrency = Math.max(1, Math.floor(Number(options.concurrency)) || CONTEXT_CONCURRENCY);
+
   const requestContext = async (input, mode, index, total, level) => {
     const prompt = buildChannelContextPrompt(input, { ...options, mode });
+    const partialKey = await fingerprint(`${options.partialCacheScope || ''}\u0000${prompt}`);
+    const cached = cachedPartials[partialKey];
+    if (cached && typeof cached === 'object' && !Array.isArray(cached)) {
+      try {
+        const context = normalizeChannelContext(cached);
+        usedPartials[partialKey] = context;
+        options.onCacheHit?.({ mode, index, total, level });
+        return context;
+      } catch {
+        // Invalid cached data is ignored and regenerated.
+      }
+    }
     let lastError;
     for (let attempt = 1; attempt <= CONTEXT_MAX_ATTEMPTS; attempt++) {
       options.onRequest?.({ mode, index, total, level, attempt, maxAttempts: CONTEXT_MAX_ATTEMPTS });
       try {
         const response = await options.request(prompt, { mode, index, total, level, attempt });
-        return parseChannelContextResponse(response);
+        const context = parseChannelContextResponse(response);
+        usedPartials[partialKey] = context;
+        return context;
       } catch (error) {
         lastError = error;
         if (attempt >= CONTEXT_MAX_ATTEMPTS || options.shouldRetry?.(error) === false) break;
-        const delayMs = retryBaseDelayMs * (2 ** (attempt - 1));
+        const delayMs = retryDelayMs(attempt, retryBaseDelayMs, error);
         options.onRetry?.({ mode, index, total, level, attempt, nextAttempt: attempt + 1, maxAttempts: CONTEXT_MAX_ATTEMPTS, delayMs, error });
         if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
@@ -312,7 +339,7 @@ export async function generateChannelContext(messages = [], options = {}) {
   };
 
   let level = 0;
-  let contexts = await mapConcurrent(sourceChunks, CONTEXT_CONCURRENCY, (chunk, index) => {
+  let contexts = await mapConcurrent(sourceChunks, concurrency, (chunk, index) => {
     return requestContext(chunk, 'extract', index, sourceChunks.length, level);
   });
   while (contexts.length > 1) {
@@ -320,9 +347,12 @@ export async function generateChannelContext(messages = [], options = {}) {
     const mergeMaximumChars = Math.max(CHANNEL_CONTEXT_SOURCE_CHUNK_CHARS, maximumChars);
     const groups = packEntries(contexts.map((context) => JSON.stringify(context)), mergeMaximumChars);
     if (groups.length >= contexts.length) throw new Error('Không thể rút gọn context phân cấp thêm.');
-    contexts = await mapConcurrent(groups, CONTEXT_CONCURRENCY, (group, index) => {
+    contexts = await mapConcurrent(groups, concurrency, (group, index) => {
       return requestContext(group, 'merge', index, groups.length, level);
     });
   }
-  return normalizeChannelContext(contexts[0]);
+  const result = normalizeChannelContext(contexts[0]);
+  // Only the partials of this run are reported, which keeps the stored cache bounded.
+  options.onPartials?.(usedPartials);
+  return result;
 }

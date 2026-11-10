@@ -116,7 +116,7 @@ export function upsertTranslations(items = []) {
       await storageSet({ [key]: record });
     }
     await storageSet({ [TRANSLATION_STORE_INDEX_KEY]: Array.from(index) });
-    return { saved };
+    return { saved, translations: normalized };
   });
 }
 

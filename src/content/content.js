@@ -2,8 +2,15 @@
 
 import { getConfig, subscribeConfigChange } from '../common/storage.js';
 import { getStoredConversationBundle, upsertOriginalMessages } from '../common/message_store.js';
-import { getCachedChannelContext, saveCachedChannelContext } from '../common/channel_context_store.js';
+import {
+  getCachedChannelContext,
+  getCachedChannelContextPartials,
+  saveCachedChannelContext,
+  saveCachedChannelContextPartials
+} from '../common/channel_context_store.js';
 import { API_KEY_RPD_EXHAUSTED_CODE } from '../common/api_key_usage.js';
+import { isPermanentGeminiError, retryDelayMs } from '../common/retry_policy.js';
+import { getFailedBatches, saveFailedBatches } from '../common/failed_batch_store.js';
 import { DEFAULT_GEMINI_MODEL } from '../common/gemini_models.js';
 import {
   getStoredTranslationsForConversation,
@@ -12,6 +19,8 @@ import {
 } from '../common/translation_store.js';
 import {
   buildTranslationPrompt,
+  cleanSenderName,
+  findTranslationFidelityIssue,
   parseAndValidateBatchHtml,
   restoreOriginalSlackHtml,
   wrapBatchHtml
@@ -24,7 +33,9 @@ import {
 
 const MESSAGE_CONTAINER_SELECTOR = '[data-qa="message_container"], .c-message_kit__message, .c-message_kit__background';
 const TRANSLATION_BATCH_SIZE = 3;
-const TRANSLATION_CONCURRENCY = 3;
+// Concurrent requests per API key; keys are reserved least-used first, so per-key load stays at this level.
+const TRANSLATION_CONCURRENCY_PER_KEY = 3;
+const TRANSLATION_MAX_CONCURRENCY = 12;
 const TRANSLATION_MAX_ATTEMPTS = 5;
 const TRANSLATION_RETRY_BASE_DELAY_MS = 1000;
 const CONTROLS_COLLAPSED_STORAGE_KEY = '__tfsControlsCollapsedV1';
@@ -91,6 +102,10 @@ const threadHistoryControls = new Map();
 let threadHistoryControlSequence = 0;
 let translationControl = null;
 let newTranslationControl = null;
+let retryFailedControl = null;
+let retryFailedConversation = '';
+let retryFailedCount = 0;
+let retryFailedRefresh = Promise.resolve();
 let controlsToggle = null;
 let translationApplyTimer = null;
 let translationRunning = false;
@@ -121,7 +136,16 @@ function normalizeExtensionError(error) {
 function geminiResponseError(response, fallback) {
   const error = new Error(response?.error || fallback);
   if (response?.code) error.code = response.code;
+  if (response?.status) error.status = response.status;
+  if (response?.retryAfterMs) error.retryAfterMs = response.retryAfterMs;
   return error;
+}
+
+function requestConcurrency(config) {
+  const keyCount = Array.isArray(config?.geminiApiKeys) && config.geminiApiKeys.length > 0
+    ? config.geminiApiKeys.length
+    : 1;
+  return Math.min(TRANSLATION_MAX_CONCURRENCY, TRANSLATION_CONCURRENCY_PER_KEY * keyCount);
 }
 
 function isRpdExhausted(error) {
@@ -330,7 +354,7 @@ function getMessageMetadata(container, snapshot) {
     messageTime: dateTime || new Date(timestampMs).toISOString(),
     messageTimestampMs: timestampMs,
     senderId: sender?.getAttribute?.('data-member-id') || sender?.getAttribute?.('data-user-id') || '',
-    senderName: normalizeText(sender?.textContent || ''),
+    senderName: cleanSenderName(normalizeText(sender?.textContent || '')),
     ...snapshot
   };
 }
@@ -1038,7 +1062,7 @@ function updateTranslationControl(control, state, label) {
 }
 
 function setTranslationControlsDisabled(disabled) {
-  for (const control of [translationControl, newTranslationControl]) {
+  for (const control of [translationControl, newTranslationControl, retryFailedControl]) {
     const button = control?.querySelector('button');
     if (button) button.disabled = disabled || extensionContextInvalidated;
   }
@@ -1102,9 +1126,10 @@ export async function translateStoredConversation(rootNode = globalThis.document
   const messages = await getStoredConversationBundle(context);
   if (messages.length === 0) throw new Error('Chưa có tin nhắn đã lưu trong channel hoặc DM này.');
   const targetMessageKey = String(options.targetMessageKey || '').trim();
+  const retryFailedBatches = options.retryFailedBatches === true;
   let eligibleKeys = null;
   let messageBatches = [];
-  if (options.onlyUntranslated || targetMessageKey) {
+  if (options.onlyUntranslated || targetMessageKey || retryFailedBatches) {
     const storedTranslations = await getStoredTranslationsForConversation(context);
     const translationsByKey = new Map(storedTranslations.map((translation) => [
       translationIdentity(translation),
@@ -1119,11 +1144,38 @@ export async function translateStoredConversation(rootNode = globalThis.document
       .map((message) => translationIdentity(message)));
   }
 
+  let storedFailedBatches = [];
+  try {
+    storedFailedBatches = await getFailedBatches(context);
+  } catch (error) {
+    if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
+  }
+  const messageKeys = new Set(messages.map((message) => translationIdentity(message)));
+  let remainingFailedBatches = storedFailedBatches.length;
+  // Keeps stored failed batches in sync: drops messages sent again in this run, already
+  // translated or no longer stored, then appends the batches that failed in this run.
+  const persistFailedBatches = async (attemptedKeys = new Set(), newFailedBatches = []) => {
+    const previous = storedFailedBatches.map((batch) => ({
+      ...batch,
+      messageKeys: batch.messageKeys.filter((key) => messageKeys.has(key)
+        && !attemptedKeys.has(key)
+        && (!eligibleKeys || eligibleKeys.has(key)))
+    }));
+    try {
+      const saved = await saveFailedBatches(context, [...previous, ...newFailedBatches]);
+      remainingFailedBatches = saved.length;
+    } catch (error) {
+      if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
+      console.warn('[translate-for-slack] Không thể lưu danh sách lô lỗi:', error);
+    }
+  };
+
   if (targetMessageKey) {
     const targetMessage = messages.find((message) => translationIdentity(message) === targetMessageKey);
     if (!targetMessage) throw new Error('Không tìm thấy tin nhắn được chọn trong bộ nhớ.');
     if (!eligibleKeys.has(targetMessageKey)) {
       const displayed = await showStoredTranslationForKey(rootNode, targetMessageKey);
+      await persistFailedBatches();
       return {
         translated: 0,
         existing: true,
@@ -1134,16 +1186,26 @@ export async function translateStoredConversation(rootNode = globalThis.document
         channelContextUsed: false,
         channelContextCached: false,
         channelContextWarning: '',
-        skipped: messages.length
+        skipped: messages.length,
+        remainingFailedBatches
       };
     }
     const selectedMessages = selectMessageTranslationWindow(messages, eligibleKeys, targetMessageKey);
     if (selectedMessages.length > 0) messageBatches.push(selectedMessages);
+  } else if (retryFailedBatches) {
+    // Resend the same message groups that failed before, skipping messages translated since then.
+    const messagesByKey = new Map(messages.map((message) => [translationIdentity(message), message]));
+    messageBatches = storedFailedBatches
+      .map((batch) => batch.messageKeys
+        .filter((key) => eligibleKeys.has(key) && messagesByKey.has(key))
+        .map((key) => messagesByKey.get(key)))
+      .filter((batch) => batch.length > 0);
   } else {
     messageBatches = buildTranslationBatches(messages, { eligibleKeys });
   }
   const messagesToTranslate = messageBatches.flat();
   if (messagesToTranslate.length === 0) {
+    await persistFailedBatches();
     return {
       translated: 0,
       failed: 0,
@@ -1153,7 +1215,8 @@ export async function translateStoredConversation(rootNode = globalThis.document
       channelContextUsed: false,
       channelContextCached: false,
       channelContextWarning: '',
-      skipped: messages.length
+      skipped: messages.length,
+      remainingFailedBatches
     };
   }
   if (!config.geminiApiKeys?.length && !String(config.geminiApiKey || '').trim()) {
@@ -1194,6 +1257,13 @@ export async function translateStoredConversation(rootNode = globalThis.document
     }
 
     if (!channelContext) {
+      let cachedPartials = {};
+      let usedPartials = null;
+      try {
+        cachedPartials = await getCachedChannelContextPartials(cacheIdentity);
+      } catch (error) {
+        if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
+      }
       try {
         options.onContextStatus?.({ phase: 'generating', cached: false });
         channelContext = await generateChannelContext(messages, {
@@ -1208,11 +1278,18 @@ export async function translateStoredConversation(rootNode = globalThis.document
           },
           onRequest: (status) => options.onContextRequest?.(status),
           onRetry: (status) => options.onContextRetry?.(status),
-          shouldRetry: (error) => !isExtensionContextInvalidated(error) && !isRpdExhausted(error)
+          shouldRetry: (error) => !isExtensionContextInvalidated(error)
+            && !isRpdExhausted(error)
+            && !isPermanentGeminiError(error),
+          concurrency: requestConcurrency(config),
+          cachedPartials,
+          partialCacheScope: config.geminiModel,
+          onPartials: (partials) => { usedPartials = partials; }
         });
         channelContextWarning = '';
         try {
           await saveCachedChannelContext({ ...cacheIdentity, context: channelContext });
+          if (usedPartials) await saveCachedChannelContextPartials(cacheIdentity, usedPartials);
         } catch (error) {
           if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
           channelContextWarning = `Đã tạo context nhưng không thể lưu cache: ${error?.message || 'lỗi không xác định'}`;
@@ -1227,6 +1304,8 @@ export async function translateStoredConversation(rootNode = globalThis.document
       }
     }
   }
+  const conversationCacheIdentity = baseConversationIdentity(context);
+  const attemptedKeys = new Set();
   let nextBatchIndex = 0;
   let completedBatches = 0;
   const successfulTranslations = [];
@@ -1242,6 +1321,7 @@ export async function translateStoredConversation(rootNode = globalThis.document
       key: translationIdentity(message),
       scope: message.conversationScope,
       threadTs: message.threadTs || '',
+      sender: message.senderName || '',
       html: translationSourceHtml(message)
     }));
     const prompt = buildTranslationPrompt(wrapBatchHtml(batchItems, documentNode), {
@@ -1265,6 +1345,16 @@ export async function translateStoredConversation(rootNode = globalThis.document
     if (!response?.success) throw geminiResponseError(response, 'Không thể dịch bằng Gemini.');
     const validated = parseAndValidateBatchHtml(response.text, batchItems, documentNode);
     if (!validated.success) throw new Error(validated.error);
+    // Wrong script or untranslated text is retried; the last attempt is kept since these checks are heuristics.
+    if (attempt < TRANSLATION_MAX_ATTEMPTS) {
+      for (let index = 0; index < batchItems.length; index++) {
+        const issue = findTranslationFidelityIssue(batchItems[index].html, validated.items[index], {
+          targetLanguageCode: config.targetLanguageCode,
+          documentNode
+        });
+        if (issue) throw new Error(`Tin nhắn ${index + 1}: ${issue}`);
+      }
+    }
 
     return batchMessages.map((message, index) => ({
       ...message,
@@ -1297,8 +1387,8 @@ export async function translateStoredConversation(rootNode = globalThis.document
           if (isExtensionContextInvalidated(error)) throw normalizeExtensionError(error);
           if (isRpdExhausted(error)) throw error;
           lastError = error;
-          if (attempt >= TRANSLATION_MAX_ATTEMPTS) break;
-          const delayMs = retryBaseDelayMs * (2 ** (attempt - 1));
+          if (attempt >= TRANSLATION_MAX_ATTEMPTS || isPermanentGeminiError(error)) break;
+          const delayMs = retryDelayMs(attempt, retryBaseDelayMs, error);
           options.onRetry?.({
             batchIndex,
             batchCount: messageBatches.length,
@@ -1320,9 +1410,16 @@ export async function translateStoredConversation(rootNode = globalThis.document
         persistenceTask.catch(() => {});
         persistenceTasks.push(persistenceTask);
         const displayTask = displayQueue.then(async () => {
-          await persistenceTask;
-          translationCacheConversation = '';
-          applied = await applyStoredTranslations(rootNode, { reload: true });
+          const persisted = await persistenceTask;
+          // Merge the saved batch into the in-memory cache instead of re-reading the whole conversation.
+          if (translationCacheConversation === conversationCacheIdentity && Array.isArray(persisted?.translations)) {
+            for (const translation of persisted.translations) {
+              translationCache.set(translationIdentity(translation), translation);
+            }
+            applied = await applyStoredTranslations(rootNode);
+          } else {
+            applied = await applyStoredTranslations(rootNode, { reload: true });
+          }
           displayedBatches++;
           options.onBatchDisplayed?.({
             batchIndex,
@@ -1339,11 +1436,13 @@ export async function translateStoredConversation(rootNode = globalThis.document
       } else {
         failedBatches.push({
           batchIndex,
+          messageKeys: batchMessages.map((message) => translationIdentity(message)),
           messageCount: batchMessages.length,
           attempts,
           error: lastError?.message || 'Không thể dịch bằng Gemini.'
         });
       }
+      batchMessages.forEach((message) => attemptedKeys.add(translationIdentity(message)));
       completedBatches++;
       options.onProgress?.({
         completedBatches,
@@ -1355,10 +1454,19 @@ export async function translateStoredConversation(rootNode = globalThis.document
     }
   };
 
-  const workerCount = Math.min(TRANSLATION_CONCURRENCY, messageBatches.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  await Promise.all(persistenceTasks);
-  await displayQueue;
+  const workerCount = Math.min(requestConcurrency(config), messageBatches.length);
+  try {
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    await Promise.all(persistenceTasks);
+    await displayQueue;
+  } finally {
+    // Also runs when the run stops early (RPD exhausted), so batches that already failed are kept.
+    await persistFailedBatches(attemptedKeys, failedBatches.map((batch) => ({
+      messageKeys: batch.messageKeys,
+      error: batch.error,
+      failedAt: Date.now()
+    }))).catch(() => {});
+  }
   if (displayErrors.length > 0) throw displayErrors[0];
   if (successfulTranslations.length === 0 && failedBatches.length > 0) {
     throw new Error(failedBatches[0].error);
@@ -1371,6 +1479,7 @@ export async function translateStoredConversation(rootNode = globalThis.document
     skipped: messages.length - messagesToTranslate.length,
     applied,
     failedBatches,
+    remainingFailedBatches,
     channelContextUsed: Boolean(channelContext),
     channelContextCached,
     channelContextWarning
@@ -1453,6 +1562,7 @@ function bindMessageTranslationButton(button, initialItem, rootNode, initialMess
       translationRunning = false;
       setTranslationControlsDisabled(false);
       setMessageTranslationButtonsDisabled(rootNode, false);
+      if (!extensionContextInvalidated) void refreshRetryFailedControl(rootNode, { force: true });
     }
   });
 }
@@ -1495,7 +1605,9 @@ function scheduleMessageTranslationButtons(rootNode = globalThis.document, delay
 
 function bindTranslationControl(control, documentNode, options = {}) {
   const button = control.querySelector('button');
-  const idleLabel = options.idleLabel || 'Dịch toàn bộ đã lưu';
+  const idleLabel = () => (typeof options.idleLabel === 'function'
+    ? options.idleLabel()
+    : options.idleLabel || 'Dịch toàn bộ đã lưu');
   button.addEventListener('click', async () => {
     if (translationRunning) return;
     translationRunning = true;
@@ -1505,6 +1617,7 @@ function bindTranslationControl(control, documentNode, options = {}) {
     try {
       const result = await translateStoredConversation(documentNode, {
         onlyUntranslated: options.onlyUntranslated === true,
+        retryFailedBatches: options.retryFailedBatches === true,
         onContextStatus: ({ phase, cached }) => {
           if (phase === 'cache') updateTranslationControl(control, 'running', 'Đang kiểm tra context chung…');
           if (phase === 'generating') updateTranslationControl(control, 'running', 'Đang cập nhật context chung…');
@@ -1534,6 +1647,8 @@ function bindTranslationControl(control, documentNode, options = {}) {
       });
       if (options.onlyUntranslated && result.total === 0) {
         updateTranslationControl(control, 'success', 'Không có tin nhắn mới cần dịch');
+      } else if (options.retryFailedBatches && result.total === 0) {
+        updateTranslationControl(control, 'success', 'Không còn lô lỗi cần dịch lại');
       } else if (result.failed > 0) {
         updateTranslationControl(control, 'error', `Đã dịch ${result.translated}/${result.total} tin nhắn; ${result.failedBatches.length} lô lỗi`);
       } else if (result.channelContextWarning) {
@@ -1548,9 +1663,11 @@ function bindTranslationControl(control, documentNode, options = {}) {
       setTranslationControlsDisabled(false);
       setMessageTranslationButtonsDisabled(documentNode, false);
       if (!extensionContextInvalidated) {
+        void refreshRetryFailedControl(documentNode, { force: true });
         setTimeout(() => {
           if (control.isConnected && control.dataset.state !== 'running') {
-            updateTranslationControl(control, 'idle', idleLabel);
+            updateTranslationControl(control, 'idle', idleLabel());
+            if (control === retryFailedControl) syncRetryFailedControl(documentNode);
           }
         }, 8000);
       }
@@ -1573,8 +1690,9 @@ function createTranslationControl(documentNode, options) {
   control.appendChild(button);
   documentNode.body.appendChild(control);
   bindTranslationControl(control, documentNode, {
-    idleLabel: options.label,
-    onlyUntranslated: options.onlyUntranslated
+    idleLabel: options.idleLabel || options.label,
+    onlyUntranslated: options.onlyUntranslated,
+    retryFailedBatches: options.retryFailedBatches
   });
   return control;
 }
@@ -1591,7 +1709,7 @@ export function ensureTranslationControl(rootNode = globalThis.document) {
     id: 'tfs-translate-all-control',
     className: 'tfs-translation-control',
     label: 'Dịch toàn bộ đã lưu',
-    title: 'Dịch lại toàn bộ tin nhắn đã lưu theo lô 3 tin, tối đa 3 yêu cầu Gemini đồng thời',
+    title: 'Dịch lại toàn bộ tin nhắn đã lưu theo lô 3 tin, 3 yêu cầu Gemini đồng thời cho mỗi khóa API',
     iconPath: 'M4 5h10M9 3v2m-3 4c1.5 3 3.5 5 6 6m1-6c-1.3 3-3.6 5.7-7 8m9-4h5m-2.5-2.5V16m-3 4 3-7 3 7'
   });
   return translationControl;
@@ -1614,6 +1732,71 @@ export function ensureNewTranslationControl(rootNode = globalThis.document) {
     iconPath: 'M12 5v14m-7-7h14'
   });
   return newTranslationControl;
+}
+
+function retryFailedLabel() {
+  return `Dịch lại ${retryFailedCount} lô lỗi`;
+}
+
+export function ensureRetryFailedControl(rootNode = globalThis.document) {
+  const documentNode = rootNode?.nodeType === 9 ? rootNode : rootNode?.ownerDocument;
+  if (!documentNode?.body) return null;
+  const existing = documentNode.getElementById('tfs-retry-failed-control');
+  if (existing) {
+    retryFailedControl = existing;
+    return existing;
+  }
+  retryFailedControl = createTranslationControl(documentNode, {
+    id: 'tfs-retry-failed-control',
+    className: 'tfs-retry-failed-control',
+    label: retryFailedLabel(),
+    idleLabel: retryFailedLabel,
+    title: 'Gửi lại đúng các lô dịch bị lỗi của channel hoặc DM này',
+    retryFailedBatches: true,
+    iconPath: 'M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7'
+  });
+  syncRetryFailedControl(documentNode);
+  return retryFailedControl;
+}
+
+// Shows the retry button only while this conversation has failed batches, or while it reports a result.
+function syncRetryFailedControl(documentNode) {
+  const control = retryFailedControl;
+  if (!control || !documentNode?.body) return;
+  const busy = control.dataset.state && control.dataset.state !== 'idle';
+  const visible = retryFailedCount > 0 || Boolean(busy);
+  control.hidden = !visible;
+  documentNode.body.dataset.tfsHasFailedBatches = visible ? 'true' : 'false';
+  if (!busy) {
+    const label = control.querySelector('.tfs-translation-label');
+    if (label && label.textContent !== retryFailedLabel()) label.textContent = retryFailedLabel();
+  }
+}
+
+export function refreshRetryFailedControl(rootNode = globalThis.document, options = {}) {
+  const documentNode = rootNode?.nodeType === 9 ? rootNode : rootNode?.ownerDocument;
+  if (!documentNode?.body || extensionContextInvalidated) return retryFailedRefresh;
+  const context = getSlackConversationContext(rootNode);
+  const identity = baseConversationIdentity(context);
+  if (!options.force && identity === retryFailedConversation) return retryFailedRefresh;
+  retryFailedConversation = identity;
+  retryFailedRefresh = retryFailedRefresh.catch(() => {}).then(async () => {
+    let count = 0;
+    if (context) {
+      try {
+        count = (await getFailedBatches(context)).length;
+      } catch (error) {
+        if (isExtensionContextInvalidated(error)) normalizeExtensionError(error);
+        return;
+      }
+    }
+    // Ignore a stale answer when the user switched conversation while storage was read.
+    if (retryFailedConversation !== identity) return;
+    retryFailedCount = count;
+    ensureRetryFailedControl(documentNode);
+    syncRetryFailedControl(documentNode);
+  });
+  return retryFailedRefresh;
 }
 
 function restoreAndRemoveOldTranslationUi(rootNode) {
@@ -1645,7 +1828,9 @@ export async function initMessageCollector(rootNode = globalThis.document) {
   ensureThreadHistoryControls(rootNode);
   ensureTranslationControl(rootNode);
   ensureNewTranslationControl(rootNode);
+  ensureRetryFailedControl(rootNode);
   await ensureControlsToggle(rootNode);
+  await refreshRetryFailedControl(rootNode, { force: true });
   await storeVisibleMessages(rootNode);
   ensureMessageTranslationButtons(rootNode);
   await applyStoredTranslations(rootNode, { reload: true });
@@ -1657,6 +1842,7 @@ export async function initMessageCollector(rootNode = globalThis.document) {
     scheduleMessageTranslationButtons(rootNode);
     scheduleVisibleStorage(rootNode);
     scheduleTranslationDisplay(rootNode);
+    void refreshRetryFailedControl(rootNode);
   });
   observer.observe(rootNode.body, { childList: true, subtree: true, characterData: true });
   rootNode.addEventListener('scroll', (event) => {

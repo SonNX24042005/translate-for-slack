@@ -1,6 +1,7 @@
 // Cached channel-wide translation briefs, isolated from source messages and translations.
 
 export const CHANNEL_CONTEXT_STORE_KEY_PREFIX = '__tfsChannelContextV1:';
+export const CHANNEL_CONTEXT_PARTIALS_KEY_PREFIX = '__tfsChannelContextPartialsV1:';
 
 let writeQueue = Promise.resolve();
 
@@ -43,8 +44,8 @@ function normalizeIdentifier(value) {
   return String(value || '').trim().slice(0, 300);
 }
 
-function cacheKey(value = {}) {
-  return CHANNEL_CONTEXT_STORE_KEY_PREFIX + [
+function cacheKey(value = {}, prefix = CHANNEL_CONTEXT_STORE_KEY_PREFIX) {
+  return prefix + [
     encodeURIComponent(normalizeIdentifier(value.workspaceId)),
     encodeURIComponent(normalizeIdentifier(value.conversationId)),
     encodeURIComponent(normalizeIdentifier(value.model)),
@@ -95,11 +96,30 @@ export function saveCachedChannelContext(value = {}) {
   });
 }
 
+// Partial (per-chunk) contexts of the latest successful run for one conversation, model and language.
+export async function getCachedChannelContextPartials(identity = {}) {
+  if (!hasChromeStorage()) return {};
+  const key = cacheKey(identity, CHANNEL_CONTEXT_PARTIALS_KEY_PREFIX);
+  const stored = (await storageGet(key))[key];
+  const partials = stored?.version === 1 ? stored.partials : null;
+  return partials && typeof partials === 'object' && !Array.isArray(partials) ? partials : {};
+}
+
+export function saveCachedChannelContextPartials(identity = {}, partials = {}) {
+  return enqueue(async () => {
+    if (!hasChromeStorage()) return;
+    if (!normalizeIdentifier(identity.workspaceId) || !normalizeIdentifier(identity.conversationId)) return;
+    const key = cacheKey(identity, CHANNEL_CONTEXT_PARTIALS_KEY_PREFIX);
+    await storageSet({ [key]: { version: 1, partials, updatedAt: Date.now() } });
+  });
+}
+
 export function clearChannelContextStore() {
   return enqueue(async () => {
     if (!hasChromeStorage()) return;
     const stored = await storageGet(null);
-    const keys = Object.keys(stored).filter((key) => key.startsWith(CHANNEL_CONTEXT_STORE_KEY_PREFIX));
+    const keys = Object.keys(stored).filter((key) => key.startsWith(CHANNEL_CONTEXT_STORE_KEY_PREFIX)
+      || key.startsWith(CHANNEL_CONTEXT_PARTIALS_KEY_PREFIX));
     if (keys.length > 0) await storageRemove(keys);
   });
 }

@@ -9,6 +9,7 @@ Extension hỗ trợ thu thập và dịch các cuộc trò chuyện trên Slack
 - **Chế độ dịch đa dạng**:
   - *Dịch toàn bộ đã lưu*: Dịch lại tất cả tin nhắn đã thu thập theo cấu hình hiện tại.
   - *Dịch tin nhắn mới*: Chỉ dịch các tin nhắn mới phát sinh chưa có bản dịch, giúp tối ưu chi phí và thời gian.
+  - *Dịch lại lô lỗi*: Nút chỉ hiện khi lần dịch trước có lô lỗi; gửi lại đúng các lô đó mà không dịch lại cả channel.
   - *Dịch tin nhắn riêng lẻ*: Hỗ trợ dịch nhanh từng tin nhắn cụ thể ngay tại khung chat.
 - **Chuyển đổi hiển thị tức thì**: Chuyển đổi qua lại giữa bản dịch và văn bản gốc thuận tiện thông qua nút bấm ngay cạnh tin nhắn.
 - **Thu gọn thanh điều khiển**: Hỗ trợ ẩn hoặc hiện cụm nút thao tác trên màn hình để không che khuất nội dung làm việc.

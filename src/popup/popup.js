@@ -7,6 +7,7 @@ import {
 } from '../common/message_store.js';
 import { clearTranslationStore } from '../common/translation_store.js';
 import { clearChannelContextStore } from '../common/channel_context_store.js';
+import { clearFailedBatchStore } from '../common/failed_batch_store.js';
 import { GEMINI_MODELS, resolveGeminiModel } from '../common/gemini_models.js';
 import { API_KEY_USAGE_STORAGE_KEY, getApiKeyUsage, pacificDay } from '../common/api_key_usage.js';
 import {
@@ -472,7 +473,7 @@ export async function initPopup(doc = document) {
 
   clearButton?.addEventListener('click', async () => {
     clearButton.disabled = true;
-    await Promise.all([clearMessageStore(), clearTranslationStore(), clearChannelContextStore()]);
+    await Promise.all([clearMessageStore(), clearTranslationStore(), clearChannelContextStore(), clearFailedBatchStore()]);
     await refreshUsage();
     showStatus('Đã xóa kho tin nhắn của phiên bản thu thập dữ liệu.');
   });
